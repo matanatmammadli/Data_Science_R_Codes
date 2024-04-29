@@ -1,0 +1,437 @@
+---
+title: "worksheet05_group02"
+author:
+- Pham Gia Cuong
+- Samra Hamidovic
+- Matanat Mammadli
+date: "2023-05-20"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise 1 - Genetic circuits (30 points)
+
+## Downloading and reading the data
+```{r}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(gmodels)
+library(tidymodels)
+library(plotrix) # for the std.error() function
+library(yhat)
+library(plotly)
+library(dplyr)
+library(fastDummies)
+library(base)
+
+```
+
+
+```{r}
+genCirc <- read_csv('/Users/matanatmammadli/Desktop/R codes/genetic_circuit.csv')
+genCirc # the whole dataset
+view(genCirc)
+
+# make four tables for each figure
+tab_1c <- genCirc[which(genCirc$figure=="1c"),] # negative controls
+tab_1e <- genCirc[which(genCirc$figure=="1e"),] # negative controls
+tab_1d <- genCirc[which(genCirc$figure=="1d"),] # full genetic circuit
+tab_1f <- genCirc[which(genCirc$figure=="1f"),] # positive control
+
+# make three tables for each experiment
+exp1 <- genCirc[which(genCirc$experiment=="ex1"),]
+exp2 <- genCirc[which(genCirc$experiment=="ex2"),]
+exp3 <- genCirc[which(genCirc$experiment=="ex3"),]
+```
+
+## Calculation: mean and standard error of mean for each experiment
+```{r}
+## mean and standard error of mean for concentration
+# Experiment 1
+conc <- exp1
+conc1 <- group_by(conc, concentration)
+concTab1 <- summarise(conc1, mean = mean(seap), standardErr = std.error(seap))
+concTab1
+# Experiment 2
+conc <- exp2
+conc2 <- group_by(conc, concentration)
+concTab2 <- summarise(conc2, mean = mean(seap), standardErr = std.error(seap))
+concTab2
+# Experiment 3
+conc <- exp3
+conc3 <- group_by(conc, concentration)
+concTab3 <- summarise(conc3, mean = mean(seap), standardErr = std.error(seap))
+concTab3
+```
+
+```{r}
+## mean and standard error of mean for cytokines
+# Experiment 1
+cyto <- exp1
+cyto1 <- group_by(cyto, cytokine)
+cytoTab1 <- summarise(cyto1, mean = mean(seap), standardErr = std.error(seap))
+cytoTab1
+# Experiment 2
+cyto <- exp2
+cyto2 <- group_by(cyto, cytokine)
+cytoTab2 <- summarise(cyto2, mean = mean(seap), standardErr = std.error(seap))
+cytoTab2
+# Experiment 3
+cyto <- exp3
+cyto3 <- group_by(cyto, cytokine)
+cytoTab3 <- summarise(cyto3, mean = mean(seap), standardErr = std.error(seap))
+cytoTab3
+```
+
+```{r}
+## mean and standard error of mean for figure setting
+fig <- genCirc
+fig_new <- group_by(fig, figure)
+figTab <- summarise(fig_new, mean = mean(seap), standardErr = std.error(seap), seap = sum(seap))
+figTab
+
+## mean and standard error of mean for experiment
+exp <- genCirc
+exp_new <- group_by(exp, experiment)
+expTab <- summarise(exp_new, mean = mean(seap), standardErr = std.error(seap))
+expTab
+```
+
+## Plots
+```{r}
+ggplot(tab_1c, aes(x=factor(concentration, levels = c(10,20,40,60,80,100,1000)), y=seap, fill=cytokine)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = "dodge", width=.2) +
+  scale_x_discrete(labels = c(10,20,40,60,80,100,1000)) + 
+  coord_cartesian(ylim = c(0,200)) + labs(x = "Concentration", y = "Seap", title = "Figure 1c")
+
+ggplot(tab_1d, aes(x=factor(concentration, levels = c(10,20,40,60,80,100,1000)), y=seap, fill=cytokine)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = "dodge") +
+  scale_x_discrete(labels = c(10,20,40,60,80,100,1000)) + 
+  coord_cartesian(ylim = c(0,200)) + labs(x = "Concentration", y = "Seap", title = "Figure 1d")
+
+ggplot(tab_1e, aes(x=factor(concentration, levels = c(10,20,40,60,80,100,1000)), y=seap, fill=cytokine)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = "dodge", width=.2) +
+  scale_x_discrete(labels = c(10,20,40,60,80,100,1000)) + 
+  coord_cartesian(ylim = c(0,200)) + labs(x = "Concentration", y = "Seap", title = "Figure 1e")
+
+ggplot(tab_1f, aes(x=factor(concentration, levels = c(10,20,40,60,80,100,1000)), y=seap, fill=cytokine)) +
+  stat_summary(geom = "bar", fun = mean, position = "dodge") +
+  stat_summary(geom = "errorbar", fun.data = mean_se, position = "dodge") +
+  scale_x_discrete(labels = c(10,20,40,60,80,100,1000)) + 
+  coord_cartesian(ylim = c(0,200)) + labs(x = "Concentration", y = "Seap", title = "Figure 1f")
+```
+
+Discussion: In the negative controls 1c and 1e the bar are very low, which is normal for a negative control. The highest amount of seap values can be seen in the figure 1d. This figure shows the full genetic circuit so its no surprise that the bars are a lot higher than in the other figures. It also shows that the seap values are getting higher the higher the concentration is. For the cytokines, the IL-4 are mostly higher than the IL-13. The last figure 1f is a positive control and the bars are slightly higher and also much higher than the negative controls, which makes sense because its a positive control. But the seap values in 1f are mostly constant with increasing concentration.
+
+# Exercise 2 - Linear Models
+```{r}
+gen_data <- read_csv('/Users/matanatmammadli/Desktop/R codes/genetic_circuit.csv')
+gen_data
+view(gen_data)
+
+```
+
+## Design a model
+```{r}
+## Multiple regression model , y = b0 + b1x1 + b2x2 + epsilon
+lm_fit <- lm(seap ~ concentration + cytokine, gen_data )
+summary(lm_fit)
+summary(lm_fit)$coefficients
+
+## Multiple linear regression in plotly 
+lm_model <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(seap ~ concentration + cytokine, data = gen_data) 
+lm_model
+
+```
+
+ - We designed a multiple regression model, and chose as an independent variable SEAP (Secreted Alkaline Phosphatase) and as dependent variables we chose Cytokine types and their concentration throughout different experiments.
+ 
+ 
+## Rescale the data + get the regression
+```{r}
+## Transform variable logarithmically to make the data more normally distributed, to rescale the data and to reduce skewness and variance
+
+gen_data$log_seap <- log(gen_data$seap + 1)
+gen_data$log_concentration <- log(gen_data$concentration + 1)
+
+cytokine <- gen_data$cytokine
+
+lm_fit_log <- lm(log_seap ~ log_concentration + cytokine, gen_data)
+summary(lm_fit_log)
+summary(lm_fit_log)$coefficients
+
+lm_model_log <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(log_seap ~ log_concentration + cytokine, data = gen_data) 
+lm_model_log
+
+```
+
+- Our continuous variables are seap and concentration (continuous but ordinal) and to make our data more normally distributed, to rescale our data and reduce swekness and variance, we decided to logarithmically transform these variables. And then got multiple regression model of the dependency of our logarithmically transformed variables.
+
+## Visualizations
+```{r pressure, echo=FALSE}
+## Scatterplot with the help of ggplot 
+ggplot(gen_data, aes(x = factor(concentration, levels = c(10,20,40,60,80,100,1000)), y = seap)) +
+  theme_minimal() +
+  scale_x_discrete(labels = c(10,20,40,60,80,100,1000)) +
+##  scale_x_continuous(breaks=c(10,20,40,60,80,100,1000)) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+    labs(title="SEAP Production depending on Cytokine concentration",
+        x ="Cytokine concentration", y = "SEAP") +
+  geom_point(colour = "dodgerblue", size = 2.5, alpha = 0.44) 
+
+ggplot(gen_data, aes(x = cytokine, y = seap, col = cytokine)) +
+  theme_bw() +
+  geom_point(size = 2.5, alpha = 0.44) 
+
+
+## Regression line with log data
+ggplot(gen_data, aes(x = log_concentration, y = log_seap )) +
+  theme_minimal() +
+  geom_point(colour = "magenta", size = 2.5, alpha = 0.4) +
+  geom_smooth(method="lm", formula = y ~ x, se = FALSE, fullrange=TRUE) 
+
+## Regression line with Plotly
+
+y <- gen_data$log_seap
+X <- gen_data$log_concentration
+
+x_range <- X
+xdf <- data.frame(x_range)
+colnames(xdf) <- c('log_concentration')
+
+ydf <- lm_model_log %>% predict(xdf) 
+
+colnames(ydf) <- c('log_seap')
+xy <- data.frame(xdf, ydf)
+
+fig1 <- plot_ly(data = gen_data, x = ~log_concentration, y = ~log_seap, type = "scatter", mode = "markers", 
+                marker = list(size = 10,
+                color = 'rgba(152, 255, 255, .9)',
+                line = list(color = 'rgba(30, 144, 255, .8)',
+                width = 2)), name = 'Seap')
+fig1 <- fig1 %>% add_trace(data = xy, x = ~log_concentration, y = ~log_seap, name = 'Regression Fit', mode = 'lines')
+fig1
+
+## Barplot
+ggplot(gen_data, aes(x = factor(concentration, levels = c(10,20,40,60,80,100,1000)), y = seap, fill = concentration)) +
+  theme_minimal() +
+  scale_x_discrete(labels=c(10,20,40,60,80,100,1000)) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  labs(title="SEAP Production depending on Cytokine concentration",
+        x ="Cytokine concentration", y = "SEAP") +
+  geom_bar(stat="identity", fill="steelblue") 
+
+## Barplot with log data
+ggplot(gen_data, aes(x = log_concentration, y = log_seap, fill = log_concentration )) +
+  theme_minimal() +
+  geom_bar(stat="identity") 
+
+ggplot(gen_data, aes(x = cytokine, y = seap, fill = cytokine)) +
+  theme_bw() +
+  geom_bar(stat="identity") 
+
+## Violinplot
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+
+ggplot(gen_data, aes(x = cytokine, y = seap, fill = cytokine)) +
+  theme_bw() +
+  geom_violin(trim=FALSE) +
+  stat_summary(fun.y=median, geom="point", size=2, color="red") +
+  stat_summary(fun.data=data_summary)
+
+
+```
+
+ - Here we visualized our model both with given original variable values, also with logarithmically scaled variable values. We also plotted regression line using ggplot and plotly libraries.
+ 
+ 
+## Effects across the different experiments, regression covariates
+```{r}
+## Continous variables are quantitative/numerical variables, which in our case is seap and concentration (concentration is numerical ordinal, because it has a set order or scale).
+
+gen_data_groupby <- gen_data %>%
+  group_by(concentration)
+gen_data_groupby
+
+
+## Mean
+mean(gen_data_groupby$seap)
+
+## Standard deviation
+sd(gen_data_groupby$seap)
+
+## Standard error von mean
+sd(gen_data_groupby$seap)/sqrt(length(gen_data_groupby))
+
+
+gen_data_groupby2 <- gen_data_groupby %>%
+  summarise(seap = mean(seap))
+gen_data_groupby2
+
+cytokine <- gen_data_groupby$cytokine
+
+gen_data_groupby3 <- gen_data_groupby %>%
+  mutate(cytokine = factor(cytokine, levels = c("IL-4",
+                                              "IL-13", "IL-4 and IL-13")))
+gen_data_groupby3
+
+
+## Group by with categorical variables
+
+gen_data_cat <- gen_data_groupby3 %>%
+    dummy_cols('cytokine', remove_selected_columns = TRUE)%>%
+    group_by(concentration)%>%
+    summarise(mean_seap = mean(seap),
+              across(starts_with('cytokine_'),
+                     ~scales::percent(mean(.x), 0.01)))
+view(gen_data_cat)
+
+## Visualize grouped data
+ggplot(gen_data_cat, aes(x = factor(concentration, levels = c(10,20,40,60,80,100,1000)), y = mean_seap, fill = concentration)) +
+  theme_minimal() +
+  scale_x_discrete(labels=c(10,20,40,60,80,100,1000)) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  labs(title="Mean SEAP Production depending on Cytokine concentration",
+        x ="Cytokine concentration", y = "Mean SEAP") +
+  geom_bar(stat="identity", fill="darkorange") 
+
+```
+
+ - There were some effects across different experiments. We grouped our data based on cytokine concentration (because different experiments used different cytokine concentration), to see if it affects SEAP production. And we calculated mean of SEAP for each concentration. We could observe, that the higher the concentration of the cytokine, which is our regression covariate, the more SEAP was produced.
+
+---
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+**Exercise 3** On the Whiteboard, you find the summary of a student
+project based on ENCODE data. The students analysed histone
+modifications in promoter regions in various types of tissue of mouse
+embryos at different developmental stages using three different types of
+omics data.
+
+(a) Find the data sets used in the student project on the ENCODE website
+    (<https://www.encodeproject.org>), i.e. CHIP-seq, ATAC-seq and polyA
+    RNA-seq data for the three tissue types in stages E14.5 and P0.
+    Answer the following questions:
+    -   In what file formats (raw and processed) is the data available?
+
+        -   ChIP-Seq: There are 11 datasets of different types of
+            Histone modifications in liver, heart and kidney tissue at
+            different developmental stages (E14.5 and P0.). They are all
+            in fastq format as a sequencing data. The processed data are
+            available in BAM, bigBed, narrowPeak and bigWig format.
+
+        -   ATAC-seq: We found only 3 datasets for this type of
+            sequencing. Sequencing data is in fastq format
+
+        -   PolyA RNA-seq: We found only 4 datasets. Sequencing data is
+            in Fastq format.
+
+    -   What information do the different file formats contain?
+
+        -   fastq: a text-based format for storing both a biological
+            sequence (usually nucleotide sequence) and its corresponding
+            quality scores
+        -   BAM: compressed binary version of a SAM file that is used to
+            represent aligned sequences
+        -   bigBed: The bigBed format stores annotation items that can
+            either be simple, or a linked collection of exons, much as
+            BED files do.
+        -   narrowPeak: A narrowPeak (. narrowPeak) file is used by the
+            ENCODE project to provide called peaks of signal enrichement
+            based on pooled, normalized (interpreted) data
+        -   bigWig: it contains data like fold change over control file
+            and signal p-values.
+
+    -   How many biological replicates are there per condition (tissue
+        type plus developmental state)?
+
+        -   Broadly speaking, biological replicates are biologically
+            distinct samples (e.g. the same type of organism treated or
+            grown in the same conditions), which show biological
+            variation; technical replicates are repeated measurements of
+            a sample, which show variation of the measuring equipment
+            and protocols
+
+    -   How many technical replicates? liver P0: 2 Biological
+        replicates, 0 technical liver E14.5: 2 Biological replicates, 0
+        technical heart P0: 1 Biological replicate, 0 technical heart
+        E14.5: 2 Biological replicates, 0 technical kidney P0: 1
+        Biological replicate, 0 technical kidney E14.5: 2 Biological
+        replicates, 0 technical
+
+    -   How many developmental stages have been studied in the Mouse
+        Development study? 2 stages: Embryonic and postanal
+
+    -   How many other tissue types? There are many other tissues types
+        likes: forebrain, adrenal gland, hypposcampus, ...
+
+    -   What other types of data have been generated?
+
+        -   XLSX : from MACS2 output was used to extract peak
+            coordinates.
+        -   GTF : contained the extracted exon lengths.
+(b) The student project was based on a scientific paper Systematic
+    mapping of chromatin state landscapes during mouse development,
+    bioRxiv, 2017, <https://www.biorxiv.org/content/10.1101/166652v1>.
+    Read the paper and answer the following questions:
+    -   In which tissues are Neurod, Myh6, Myh7, Nkx2-1, and Wt1
+        expressed?
+        -   Neurod: Forebrain
+        -   Myh6:heart
+        -   Myh7:heart
+        -   Nkx2-1: Lungs
+        -   Wt1: Kidney
+    -   Are differences observed over the different developmental
+        stages?
+        -   The research findings indicate that a notable shift in heart
+            activity occurs in cardiomyocytes during the transition from
+            Myh7 to Myh6, particularly before the birth stage (P0). This
+            change suggests a significant developmental milestone in
+            cardiac function. Additionally, during forebrain
+            development, specific markers associated with mature
+            neurons, such as NeuroD2 and Gad1, undergo a transformation
+            in their histone modifications. They acquire active histone
+            modifications while simultaneously losing repressive
+            modifications. This observation implies a dynamic process
+            associated with the maturation of neurons in the forebrain.
+(c) Which histone marks are usually associated with active/inactive
+    promoters, enhancers, gene body, and repressed regions? - active
+    promotor: H3K27ac, H3K4me3 - active enhancer: H3K27ac, H3K4me1 -
+    inactive promotor/enhancer: H3K27me3
+(d) Which of the histone marks correlate with open chromatin?
+    -   Histone mark H3K27ac
+(e) What is ChromHMM? To answer the last question it may help to look
+    into the original publication of the method.
+    -   ChromHMM is a software tool designed to assist in the
+        identification and characterization of chromatin states. It
+        enables the analysis of various types of chromatin-related data,
+        including CHIPseq data, to discover consistent patterns in the
+        occurrence of histone modifications. The software utilizes a
+        Hidden Markov Model (HMM) approach to determine the presence and
+        distribution of specific histone marks within chromatin.

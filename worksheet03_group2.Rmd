@@ -1,0 +1,127 @@
+---
+title: "worksheet03_group2"
+author:
+- ???
+- Samra Hamidovic
+- Matanat Mammadli
+date: "2023-05-05"
+output: pdf_document
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      tidy.opts = list(width.cutoff = 70), 
+                      tidy = TRUE)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise 3 - Clustering
+
+## Downloading useful packages and reading data
+
+```{r}
+install.packages("ISLR2")
+library(ISLR2)
+library(dplyr)
+library(utils)
+library(tidyverse)
+nci.labs <- NCI60$labs
+nci.data <- NCI60$data
+```
+
+```{r}
+view(nci.labs)
+view(nci.data)
+```
+
+
+## Scale the variables (Standardization of the data)
+
+```{r}
+set.seed(123)
+df <- nci.data
+df_scaled <- scale(df, center=TRUE, scale = TRUE) %>%
+  as_tibble()
+
+df_scaled 
+summary(df_scaled)
+```
+
+
+## Hierarchical Clustering
+
+```{r}
+## Complete linkage clustering - (Find the maximum possible distance between points belonging to two different clusters)
+
+## creating distance matrix first
+dist_mat <- dist(df_scaled, method = 'euclidean')
+
+hclust_comp <- hclust(dist_mat, method = 'complete')
+plot(hclust_comp)
+
+## Single linkage clustering - (Find the minimum possible distance between points belonging to two different clusters)
+
+hclust_sing <- hclust(dist_mat, method = 'single')
+plot(hclust_sing)
+
+## Average (or Mean) linkage clustering - (Find all possible pairwise distances for points belonging to two different clusters and then calculate the average)
+
+hclust_avg <- hclust(dist_mat, method = 'average')
+plot(hclust_avg)
+
+## Centroid linkage clustering - (Find the centroid of each cluster and calculate the distance between centroids of two clusters)
+
+hclust_cent <- hclust(dist_mat, method = 'centroid')
+plot(hclust_cent)
+
+```
+
+ - Yes, the dendrograms show the features specific to the linkage type introduced in the lecture.
+
+## Complete linkage hierarchical clustering - cut the dendrogram
+
+```{r}
+hclust_comp_cut <- cutree(hclust_comp, 3)
+hclust_comp_cut
+
+plot(hclust_comp)
+rect.hclust(hclust_comp , k = 3, border = 2:6)
+abline(h = 3, col = 'red')
+```
+
+### Describe the patterns for the different cancer types
+ -  Yes, cell lines of the same cancer type do cluster together. For ex, as we can see, 1 and 2 are clustered together, both are CNS type. Same with 57 and 58, both are Breast type, 47, 48 and 43 are Colon types etc.
+
+## K-Means Clustering
+
+```{r}
+set.seed(123)
+km_df_scaled <- kmeans(df_scaled, 3, nstart = 25)
+print(km_df_scaled)
+km_df_scaled$cluster
+
+## Quality of k-means partition - BSS/TSS x 100%
+
+BSS <- km_df_scaled$betweenss
+BSS
+
+TSS <- km_df_scaled$totss
+TSS
+
+BSS/TSS * 100
+
+## Quality is only 14.85961 %
+```
+
+## Compare the best results of K-Means Clustering with Hierarchical clustering
+
+ - One should choose the k-means clustering when the number of groups is specified in advance. If we do not have any reason to believe there is a certain number of groups in our dataset, then it's better to opt for the hierarchical clustering to determine in how many clusters our data should be divided.
+ - With a large number of variables, k-means may be computationally faster than hierarchical clustering if the number of clusters is small.
+ - On the other hand, the result of a hierarchical clustering is a structure that is more informative and interpretable than the unstructured set of flat clusters returned by k-means.
+
+
+
+

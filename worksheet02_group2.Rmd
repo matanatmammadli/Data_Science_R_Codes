@@ -1,0 +1,562 @@
+---
+title: "worksheet02_group2"
+date: "2023-04-30"
+author:
+- Pham Gia Cuong
+- Samra Hamidovic
+- Matanat Mammadli
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      tidy.opts = list(width.cutoff = 70), 
+                      tidy = TRUE)
+```
+
+# Exercise 1 - Post-hoc power analysis
+
+## Downloading libraries
+
+```{r libraries}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(powerMediation)
+```
+
+### Read the lung_data.csv from Worksheet 1 and compute the (post-hoc) power of a t-test at a significance level of α = 0.05. For σ assume the empirical standard deviation from the control group. What did you use as δ and what’s the result?
+
+```{r generating}
+lung_data <- read_csv('/Users/matanatmammadli/Desktop/R codes/lung_data.csv')
+
+# empirical standard deviation from the control group
+control <- lung_data[which(lung_data$Trial.arm=="Control"), ] # table for the control group only 
+treatment <- lung_data[which(lung_data$Trial.arm=="Treatment"), ] # table for the control group only 
+stdDev <- sd(control$Lung.function) # our standard deviation
+
+meanDiff <- mean(treatment$Lung.function) - mean(control$Lung.function)
+meanDiff # our delta
+```
+
+```{r compute power}
+# compute (post hoc) power
+power.t.test(n = 40, delta = meanDiff,  sd = stdDev, sig.level = 0.05, power = NULL, type = "two.sample", strict = TRUE)$power # power is strong enough (about 80%)
+
+power.t.test(n = 20, delta = meanDiff,  sd = stdDev, sig.level = 0.05, power = NULL, type = "two.sample", strict = TRUE)$power # power is too weak (under 80%), because n is too small
+```
+
+###To explore post-hoc power further, sample two normally distributed samples of size n = 20 with sd 1, one as “control” with mean 0 and one as “treatment” with mean 0.5. Compute the p-value of the t-test of the two 2 groups, and the post-hoc power using the observed difference in means between the two groups and the sd computed from their pooled (averaged) variance. Repeat the simulation a large number of times and plot p-values against the post-hoc power. Discuss whether post-hoc power analysis is generally a reliable measure.
+
+```{r post hoc power}
+# settings
+n1 <- 20
+n2 <- 20
+controlG <- rnorm(n = n1, mean = 0, sd = 1) 
+treatmentG <- rnorm(n = n2, mean = 0.5, sd = 1)
+
+get_p_value <- function(controlG, treatmentG, n, sd) {
+  controlG <- rnorm(n = n1, mean = 0, sd = 1) 
+  treatmentG <- rnorm(n = n2, mean = 0.5, sd = 1)
+  
+  t_test <- t.test(treatmentG, controlG, alternative = "greater")
+  
+  t_test$p.value
+}
+var1 <- var(controlG)
+var2 <- var(treatmentG)
+varpooled <- ((n1-1)*var1 + (n2-1)*var2) / (n1+n2-2)
+
+# p-value ----------------
+ns <- 3000 # number of Simulations
+n <- 40 # number of samples
+# get p-values
+p_values <- c(1:ns) %>% 
+  map_dbl(~ get_p_value(n = n1, sd = varpooled))
+
+# power ------------------
+power <- (sum(p_values) / ns)
+power2 <- (sum(p_values < 0.05) / ns)
+
+# p-distribution without the condition p-values < 0.05
+ggplot(NULL, aes(x = p_values)) +
+  geom_histogram(binwidth = .05, fill = "grey80",
+                 color = "black", boundary = 0) +
+  labs(
+    title = paste0("p-distribution with ",
+                   ns, " studies; type I error: ", round(power * 100, 2), "%\n",
+                   "correct statistical decision: ", round(100 - (power * 100), 2), "%",
+                   "; n = ", n),
+    x = "p-values",
+    y = "frequency"
+  ) +
+  geom_vline(xintercept = .05, color = "red", linetype = "dashed") +
+  scale_y_continuous(limits = c(0, ns), expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0, 1), expand = c(0, 0),
+                     breaks = seq(0, 1, by = 0.1)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.margin = unit(rep(1.2, 4), "cm"),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  )
+
+# p-distribution with the condition p-values < 0.05
+ggplot(NULL, aes(x = p_values)) +
+  geom_histogram(binwidth = .05, fill = "grey80",
+                 color = "black", boundary = 0) +
+  labs(
+    title = paste0("p-distribution with ",
+                   ns, " studies; type I error: ", round(power2 * 100, 2), "%\n",
+                      "correct statistical decision: ", round(100 - (power2 * 100), 2), "%",
+                   "; n = ", n),
+    x = "p-values",
+    y = "frequency"
+  ) +
+  geom_vline(xintercept = .05, color = "red", linetype = "dashed") +
+  scale_y_continuous(limits = c(0, ns), expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0, 1), expand = c(0, 0),
+                     breaks = seq(0, 1, by = 0.1)) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.margin = unit(rep(1.2, 4), "cm"),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10))
+  )
+
+```
+
+## Discussion:
+###We came to the conclusion that the post-hoc power analysis is indeed a reliable measure. It is a good addition for the complete analysis and a false rejection can be prevented. The p-value itself is not always enough to make a decision. We need more measurements to see the bigger picture. 
+
+###For the p-values we set the condition that the p-values have to be smaller than 0.05. First we did the visualization without this condition and we can see that the error is small and the decision we made was 86.61%% correct. However in the second plot the error is much larger because there were many p-values which were greater than 0.05 and with this the decision we made was only 54.37% correct.
+
+# Exercise 2 - Multiple testing correction
+
+## Download useful libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
+```
+
+## Download and read the data as tibble
+```{r}
+url <- paste0("https://gdac.broadinstitute.org",
+              "/runs/analyses__latest/reports/cancer/",
+              "LUSC-TP/MutSigNozzleReport2CV/sig_genes.txt")
+lung_cancer_df <- read_tsv(url)
+```
+
+## View the data
+```{r}
+head(lung_cancer_df)
+view(lung_cancer_df)
+tail(lung_cancer_df)
+```
+
+## Bonferroni Correction controlling FWER (Familywise error rate)
+
+```{r}
+## add the Bonferroni adjusted p-values
+
+lung_cancer_df$p_bonferroni <- p.adjust(lung_cancer_df$p, method = "bonferroni")
+lung_cancer_df
+colnames(lung_cancer_df)
+
+## check the adjustment by hand
+lung_cancer_df$p_times_m <- lung_cancer_df$p*nrow(lung_cancer_df)
+head(lung_cancer_df)
+## just view head of two new columns of corrected data
+head(select(lung_cancer_df, p_bonferroni, p_times_m))
+
+## use the filter function from dplyr
+sig_lung_cancer_df_bonferroni <- filter(lung_cancer_df, p_bonferroni < 0.05)
+view(sig_lung_cancer_df_bonferroni)
+tail(sig_lung_cancer_df_bonferroni)
+```
+
+### After Bonferroni correction and filtering, only 10 genes are significant, compared to 18268 genes before correction.
+### Bonferroni correction controls Familywise error rate and the values here look different than q values in the data.
+
+## Plotting Bonferroni corrected genes
+
+### Boxplot
+```{r}
+ggplot(sig_lung_cancer_df_bonferroni, aes(x = p_bonferroni, y = gene, fill = p_bonferroni)) +
+  geom_boxplot()
+
+ggplot(sig_lung_cancer_df_bonferroni, aes(x = gene, y = p_bonferroni, fill = gene)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+### Bee swarm plot
+```{r}
+ggplot(sig_lung_cancer_df_bonferroni, aes(x = p_bonferroni, y = gene, fill = p_bonferroni)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5)
+
+ggplot(sig_lung_cancer_df_bonferroni, aes(x = gene, y = p_bonferroni, fill = gene)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+### Q-Q plot
+```{r}
+# Calculate the theoretical quantiles for a normal distribution
+expected_qq <- qnorm(p = seq(0.01, 0.99, by = 0.01))
+
+# Create the QQ plot
+ggplot(sig_lung_cancer_df_bonferroni, aes(sample = p_bonferroni)) +
+  stat_qq(distribution = qnorm) +
+  stat_qq_line()
+```
+
+
+## Holm correction controlling FWER
+
+```{r}
+## add the Holm adjusted p-values
+
+lung_cancer_df$p_holm <- p.adjust(lung_cancer_df$p, method = "holm")
+lung_cancer_df
+colnames(lung_cancer_df)
+
+## check the adjustment by hand
+lung_cancer_df$p_X_m_minus_rank <- lung_cancer_df$p*(nrow(lung_cancer_df) + 1 - lung_cancer_df$rank)
+head(lung_cancer_df[, -5])
+
+## use the filter function from dplyr
+sig_lung_cancer_df_holm <- filter(lung_cancer_df, p_holm < 0.05)
+view(sig_lung_cancer_df_holm)
+tail(sig_lung_cancer_df_holm[, -5])
+```
+
+### Out of 18268 genes, only 10 are significant after Holm correction (just like in Bonferroni correction).
+
+## Plotting Holm Corrected genes
+
+### Boxplot
+```{r}
+ggplot(sig_lung_cancer_df_holm, aes(x = p_holm, y = gene, fill = p_holm)) +
+  geom_boxplot()
+
+ggplot(sig_lung_cancer_df_holm, aes(x = gene, y = p_holm, fill = gene)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+### Bee swarm plot
+```{r}
+ggplot(sig_lung_cancer_df_holm, aes(x = p_holm, y = gene, fill = p_holm)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5)
+
+ggplot(sig_lung_cancer_df_holm, aes(x = gene, y = p_holm, fill = gene)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+### Q-Q plot
+```{r}
+# Calculate the theoretical quantiles for a normal distribution
+expected_qq <- qnorm(p = seq(0.01, 0.99, by = 0.01))
+
+# Create the QQ plot
+ggplot(sig_lung_cancer_df_holm, aes(sample = p_holm)) +
+  stat_qq(distribution = qnorm) +
+  stat_qq_line()
+```
+
+
+
+## Benjamini_Hochberg Correction controlling FDR (False discovery rate)
+
+```{r}
+## add the BH adjusted p-values
+
+lung_cancer_df$p_BH <- p.adjust(lung_cancer_df$p, method = "BH")
+lung_cancer_df
+colnames(lung_cancer_df)
+
+## check the adjustment by hand
+
+lung_cancer_df$p_X_m_over_rank <- lung_cancer_df$p*nrow(lung_cancer_df)/lung_cancer_df$rank
+head(lung_cancer_df[, -c(5:7)])
+## just view head of two new columns of corrected data
+head(select(lung_cancer_df, p_bonferroni, p_times_m, p_BH, p_X_m_over_rank))
+## view the whole data
+view(lung_cancer_df)
+
+## use the filter function from dplyr
+sig_lung_cancer_df_BH <- filter(lung_cancer_df, p_BH < 0.05)
+view(sig_lung_cancer_df_BH)
+tail(sig_lung_cancer_df_BH[, -c(5:7)])
+```
+
+### There are 14 significant genes after Benjamini-Hochberg correction, as opposed to 18268 genes before correction.
+
+### As we could notice, our attained p-values with Benjamini_Hochberg correction (p_BH) are matching "q" column values in the data lung_cancer_df. Knowing that Benjamini-Hochberg correction controls FDR (false discovery rate), we assume that in the data they also controlled FDR.
+
+## Plotting BH corrected genes
+
+### Boxplot
+```{r}
+ggplot(sig_lung_cancer_df_BH, aes(x = p_BH, y = gene, fill = p_BH)) +
+  geom_boxplot()
+
+ggplot(sig_lung_cancer_df_BH, aes(x = gene, y = p_BH, fill = gene)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+### Bee swarm plot
+```{r}
+ggplot(sig_lung_cancer_df_BH, aes(x = p_BH, y = gene, fill = p_BH)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5)
+
+ggplot(sig_lung_cancer_df_BH, aes(x = gene, y = p_BH, fill = gene)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0), alpha = 0.5) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+### Q-Q plot
+```{r}
+# Calculate the theoretical quantiles for a normal distribution
+expected_qq <- qnorm(p = seq(0.01, 0.99, by = 0.01))
+
+# Create the QQ plot
+ggplot(sig_lung_cancer_df_BH, aes(sample = p_BH)) +
+  stat_qq(distribution = qnorm) +
+  stat_qq_line()
+```
+
+### As we can see from Q-Q plot, Benjamini-Hochberg corrected p values are not normally distributed.
+
+### There are 14 significant genes after Benjamini-Hochberg correction, as opposed to 18268 genes before correction.
+
+### As we could notice, our attained p-values with Benjamini_Hochberg correction (p_BH) are matching "q" column values in the data lung_cancer_df. Knowing that Benjamini-Hochberg correction controls FDR (false discovery rate), we assume that in the data they also controlled FDR.
+
+# Analysis for lung adenocarcinoma 
+
+## Download and read the data as tibble
+```{r}
+url <- paste0("https://gdac.broadinstitute.org",
+              "/runs/analyses__latest/reports/cancer/",
+              "LUAD-TP/MutSigNozzleReport2CV/sig_genes.txt")
+lung_adenocarcinoma_df <- read_tsv(url)
+```
+
+## View the data
+```{r}
+head(lung_adenocarcinoma_df)
+view(lung_adenocarcinoma_df)
+tail(lung_adenocarcinoma_df)
+```
+
+
+## Bonferroni Correction controlling FWER (Familywise error rate)
+```{r}
+## add the Bonferroni adjusted p-values
+
+lung_adenocarcinoma_df$p_bonferroni <- p.adjust(lung_adenocarcinoma_df$p, method = "bonferroni")
+lung_adenocarcinoma_df
+colnames(lung_adenocarcinoma_df)
+
+## check the adjustment by hand
+lung_adenocarcinoma_df$p_times_m <- lung_adenocarcinoma_df$p*nrow(lung_adenocarcinoma_df)
+head(lung_adenocarcinoma_df)
+## just view head of two new columns of corrected data
+head(select(lung_adenocarcinoma_df, p_bonferroni, p_times_m))
+
+## use the filter function from dplyr
+sig_lung_adenocarcinoma_df_bonferroni <- filter(lung_adenocarcinoma_df, p_bonferroni < 0.05)
+view(sig_lung_adenocarcinoma_df_bonferroni)
+tail(sig_lung_adenocarcinoma_df_bonferroni)
+```
+
+### As we can see, in Lung adenocarcinoma data there are 18 significant genes after Bonferroni correction, 8 more than in lung cancer data. 
+
+## Holm correction controlling FWER
+```{r}
+## add the Holm adjusted p-values
+
+lung_adenocarcinoma_df$p_holm <- p.adjust(lung_adenocarcinoma_df$p, method = "holm")
+lung_adenocarcinoma_df
+colnames(lung_adenocarcinoma_df)
+
+## check the adjustment by hand
+lung_adenocarcinoma_df$p_X_m_minus_rank <- lung_adenocarcinoma_df$p*(nrow(lung_adenocarcinoma_df) + 1 - lung_adenocarcinoma_df$rank)
+head(lung_adenocarcinoma_df[, -5])
+
+## use the filter function from dplyr
+sig_lung_adenocarcinoma_df_holm <- filter(lung_adenocarcinoma_df, p_holm < 0.05)
+view(sig_lung_adenocarcinoma_df_holm)
+tail(sig_lung_adenocarcinoma_df_holm[, -5])
+```
+
+### Also after Holm correction we had 18 significant genes (just like after Bonferroni correction) in lung adenocarcinoma data, as opposed to 10 in lung cancer data.
+
+## Benjamini_Hochberg Correction controlling FDR (False discovery rate)
+```{r}
+## add the BH adjusted p-values
+
+lung_adenocarcinoma_df$p_BH <- p.adjust(lung_adenocarcinoma_df$p, method = "BH")
+lung_adenocarcinoma_df
+colnames(lung_adenocarcinoma_df)
+
+## check the adjustment by hand
+
+lung_adenocarcinoma_df$p_X_m_over_rank <- lung_adenocarcinoma_df$p*nrow(lung_adenocarcinoma_df)/lung_adenocarcinoma_df$rank
+head(lung_adenocarcinoma_df[, -c(5:7)])
+## just view head of two new columns of corrected data
+head(select(lung_adenocarcinoma_df, p_bonferroni, p_times_m, p_BH, p_X_m_over_rank))
+## view the whole data
+view(lung_adenocarcinoma_df)
+
+## use the filter function from dplyr
+sig_lung_adenocarcinoma_df_BH <- filter(lung_adenocarcinoma_df, p_BH < 0.05)
+view(sig_lung_adenocarcinoma_df_BH)
+tail(sig_lung_adenocarcinoma_df_BH[, -c(5:7)])
+```
+
+### We had 40 significant genes after Benjamini-Hochberg correction, more than after Bonferroni and Holm correction, and much more than with BH correction but in lung cancer data (which were just 14).
+
+# Exercise 3 - Multiple testing correction calibration
+
+## Installing useful packages
+```{r packages}
+pacman::p_load(ggplot2,plyr)
+set.seed(42)
+```
+
+```{r genearting}
+#Generating 90 times 10 samples from a standard normal distribution
+l_distribution <- replicate(90,rnorm(10))
+l_distribution[,1]
+#Generating 10 times 10 samples from a normal distribution mean u = 3 and standard deviation o = 1
+s_distribution <- replicate(10,rnorm(10,mean=3,sd=1))
+```
+
+```{r one sample t-test}
+lp_value <- list()
+sp_value <- list()
+for (i in 1:90){
+  lp_value[i] <- t.test(x=l_distribution[,i])$p.value
+}
+
+for (i in 1:10) {
+  sp_value[i] <- t.test(x=s_distribution[,i],mu=0)$p.value
+}
+
+#Combine two p_values arrays
+all_pvalues <- c(unlist(lp_value),unlist(sp_value))
+hist(all_pvalues,freq =FALSE,ylab='Density',xlab='p_value')
+```
+
+```{r multiple testing}
+index <- seq(1,100)
+pvalues_df <- data.frame(index,all_pvalues)
+pvalues_df$bon_pvalues <- p.adjust(pvalues_df$all_pvalues,method = "bonferroni") #pvalues_df$all_pvalues * length(pvalues_df$all_pvalues) 
+
+pvalues_df$bh_pvalues <- p.adjust(all_pvalues,method = "BH")
+
+hist(pvalues_df$bon_pvalues,freq=FALSE,ylab='Density',xlab='p_value')
+hist(pvalues_df$bh_pvalues,freq=FALSE,ylab='Density',xlab='p_value')
+```
+
+### When we do multiple testing, the chances that we get some type I errors increases. FWER is probability that we make at least one type I error when we run multiple tests. FDR is False discovery rate, which means, that the probability of making at least one false discovery (a Type I error) increases with the number of tests conducted.
+
+### Explaination for why is that sum of all p-values , which are below 0.05, equal to FWER: In a test, p-value define a probability, in which H0 hypothesis true is. So the FWER for one test would be p-value. If we also reject H0 hypothesis in second test, the FWER for 2 tests would be sum of 2 p-values divided by 2. And therefore, the FWER for all tests would be the sum of all p-value divided by number of test, that are smaller than 0.05.
+
+### To calculate the FDR with cutoff p = 1. We will count number of p-values, which are \<= 0.05 and divide it for number of test
+
+```{r FWER and FDR calculation}
+#Calculate FWER after adjusting pvalue with Bonferroni and BH method
+significant_bon <- pvalues_df$bon_pvalues[pvalues_df$bon_pvalues <= 0.05]
+significant_bh <- pvalues_df$bh_pvalues[pvalues_df$bon_pvalues <= 0.05]
+
+FWER_bon <- sum(significant_bon) / length(pvalues_df$bon_pvalues)
+
+FWER_bh <- sum(significant_bh) / length(pvalues_df$bh_pvalues)
+
+#Calculate FDR after adjusting pvalue with Bonferroni and BH method
+
+FDR_bon <- length(significant_bon)/100
+FDR_bh <- length(significant_bh)/100
+
+print(paste("FWER with adjusted after Bonferroni is :",FWER_bon))
+print(paste("FWER with adjusted after BH is :",FWER_bh))
+print(paste("FDR with adjusted after Bonferroni is :",FDR_bon))
+print(paste("FDR with adjusted after BH is :",FDR_bh))
+
+```
+
+### Increasing number of test. Guess: FDR,FWER will be increased
+
+```{r Increasing number of test}
+FWER_bh_arr <- list()
+FWER_bon_arr <- list()
+FDR_bon_arr <- list()
+FDR_bh_arr <- list()
+
+for ( i in 2:5){
+  #Generating 90 times 10 samples from a standard normal distribution
+  l_distribution <- rdply(9*(10^i),rnorm(10))
+  #Generating 10 times 10 samples from a normal distribution mean u = 3 and standard deviation o = 1
+  s_distribution <- rdply(10^i,rnorm(10,mean=3,sd=1))
+  
+  row_ttest <- function(row) {
+    t.test(row)
+  }
+  
+  row_ttest_mu <- function(row) {
+    t.test(row,mu=0)
+  }
+  # Apply the function to each row using apply()
+  lp_values <- apply(l_distribution, 1, function(row) {
+    row_ttest(row)$p.value
+  })
+  
+  sp_values <- apply(s_distribution, 1, function(row) {
+    row_ttest_mu(row)$p.value
+  })
+  all_pvalues <- c(lp_values,sp_values)
+  
+  bon_pvalues <- p.adjust(all_pvalues,method = "bonferroni") #pvalues_df$all_pvalues * length(pvalues_df$all_pvalues) 
+  significant_p_bon <- bon_pvalues[bon_pvalues <= 0.05]
+  
+  bh_pvalues <- p.adjust(all_pvalues,method = "BH")
+  significant_p_bh <- bh_pvalues[bh_pvalues <= 0.05]
+  
+  FWER_bon <- sum(significant_p_bon) / length(all_pvalues)
+  
+  FWER_bh <- sum(significant_p_bh) / length(all_pvalues)
+  
+  FWER_bh_arr[i-1] <- FWER_bh
+  FWER_bon_arr[i-1] <- FWER_bon
+  #Calculate FDR after adjusting pvalue with Bonferroni and BH method
+  
+  FDR_bon <- length(significant_bon)/(10^(i+1))
+  FDR_bh <- length(significant_bh)/(10^(i+1))
+  
+  FDR_bon_arr[i-1] <- FDR_bon
+  FDR_bh_arr[i-1] <- FDR_bh
+}
+print(paste("Mean of FWER with BH is: ",mean(unlist(FWER_bh_arr))))
+print(paste("Mean of FWER with Bonferroni is: ",mean(unlist(FWER_bon_arr))))
+print(paste("Mean of FDR with Bonferroni is: ",mean(unlist(FDR_bon_arr))))
+print(paste("Mean of FDR with BH is: ",mean(unlist(FDR_bh_arr))))
+```
+
+### So my guess was wrong. It could be that p-values have been adjusted already, therefore the FWER and FDR are decreased.

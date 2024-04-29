@@ -1,0 +1,428 @@
+---
+title: "worksheet01_group2"
+output: pdf_document
+date: "2023-04-21"
+author:
+- Aditya Panchal
+- Samra Hamidovic
+- Matanat Mammadli
+---
+
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      tidy.opts = list(width.cutoff = 70), 
+                      tidy = TRUE)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Task 1: t-test
+
+### The t-test assumes normally distributed data. For an increasing number of samples N = {5, 10, 20, 50, 100}, sample from each of these distributions:
+
+- a continuous uniform distribution in the interval [-1, 1]
+
+- a student-t distribution with parameter df = 1
+
+- a discrete uniform distribution with domain {-1, 1}
+
+### For each of these distributions and sample sizes N, sample a large number of times and conduct a two-sided t-test for each sample against a mean of 0 (i.e. Ho: mean is 0). Plot the p-value distributions for the smallest sample size for each distribution. Compare your results to the null distribution, and report how many are below the nominal significance level of alpha = 0.05. For all distributions plot the fraction of significant results as the sample size increases. Discuss what you find
+
+## We start be loading some packages and setting up the variables
+```{r}
+library(tidyverse)
+library(magrittr)
+```
+
+## Defining sample sizes and number of iterations for each sample size
+```{r}
+N <- c(5, 10, 20, 50, 100)
+n_iters <- 10000
+```
+
+## Creating data frames to store results
+```{r}
+results_uniform_continuous <- data.frame(
+  distribution = character(),
+  sample_size = integer(),
+  iteration = integer(),
+  p_value = numeric()
+)
+results_student_t <- data.frame(
+  distribution = character(),
+  sample_size = integer(),
+  iteration = integer(),
+  p_value = numeric()
+)
+results_discrete_uniform <- data.frame(
+  distribution = character(),
+  sample_size = integer(),
+  iteration = integer(),
+  p_value = numeric()
+)
+```
+
+## Looping over sample sizes and distributions, conducting t-tests and storing results
+
+### Continuous uniform distribution on [-1, 1]
+
+```{r}
+# Have to loop over each distribution separately because it kept throwing 
+# "Error in t.test.default(data) : data are essentially constant"
+for (n in N) {
+  for (i in 1:n_iters) {
+    data <- runif(n, min = -1, max = 1)
+    p_value <- t.test(data)$p.value #two-sided by default
+    results_uniform_continuous <- results_uniform_continuous %>%
+      add_row(
+        distribution = "uniform",
+        sample_size = n,
+        iteration = i,
+        p_value = p_value
+      )
+  }
+}
+```
+
+### Student-t distribution with degrees of freedom = 1
+
+```{r}
+for (n in N) {
+  for (i in 1:n_iters) {
+    data <- rt(n, df = 1)
+    p_value <- t.test(data)$p.value
+    results_student_t <- results_student_t %>% add_row(
+      distribution = "Student-t",
+      sample_size = n,
+      iteration = i,
+      p_value = p_value
+    )
+  }
+}
+```
+
+### Discrete uniform distribution on {-1, 1}
+
+```{r}
+set.seed(123)
+for (n in N) {
+  if (n == 5 || n == 10) {
+    n_iters = 30 # only seems to be working when sampled less number of times 
+    # for a small sample size else it throws the error 
+    # 'data are essentially constant'
+  }
+  else {
+    n_iters = 10000 # works for big enough sample size
+  }
+  for (i in 1:n_iters) {
+    data <- sample(c(-1, 1), n, replace = TRUE)
+    p_value <- t.test(data)$p.value
+    results_discrete_uniform <- results_discrete_uniform %>% add_row(
+      distribution = "Discrete Uniform",
+      sample_size = n,
+      iteration = i,
+      p_value = p_value
+    )
+  }
+}
+```
+
+## Plotting the p-value distributions for the smallest sample size of each distribution.
+
+```{r}
+results_uniform_continuous %>%
+  filter(sample_size == min(N)) %>%
+  pull(p_value) %>% # extract the 'p_value; column as a numeric vector
+  hist(breaks = 10, main = "p-value distribution(Uniform continuous on [-1, 1])", 
+       xlab = "p-values", col = "#8669d355") # plot the histogram
+```
+
+p-values are distributed uniformly (as data is uniformly sampled)
+
+```{r}
+results_student_t %>%
+  filter(sample_size == min(N)) %>%
+  pull(p_value) %>% # extract the 'p_value; column as a numeric vector
+  hist(breaks = 30, main = "p-value distribution(Student-t with df = 1)", 
+       xlab = "p-values", col = "#8669d355") # plot the histogram
+```
+
+p-values are a bit skewed to the left (as our data is non-Gaussian)
+
+```{r}
+results_discrete_uniform %>%
+  filter(sample_size == min(N)) %>%
+  pull(p_value) %>% # extract the 'p_value; column as a numeric vector
+  hist(breaks = 10, main = "p-value distribution(Uniform discrete on {-1, 1})", 
+       xlab = "p-values", col = "#8669d355") # plot the histogram
+```
+
+p-values are more or less uniformly distributed. However, there are some discrepencies (mostly due to the small sample size maybe)
+
+## Calculating the number of significant results i.e. below  the nominal significance level of alpha = 0.05 
+
+### Continuous uniform distribution on [-1, 1]
+
+```{r, message = FALSE, warning = FALSE}
+significant_results_continuous <- results_uniform_continuous %>%
+  filter(p_value < 0.05) %>%
+  group_by(sample_size) %>%
+  summarize(num_of_significant_p_values = n()) %>%
+  mutate(fraction = num_of_significant_p_values / nrow(results_uniform_continuous))
+print(significant_results_continuous)
+```
+
+### Student-t distribution with degrees of freedom = 1
+
+```{r, message = FALSE, warning = FALSE}
+significant_results_student_t <- results_student_t %>%
+  filter(p_value < 0.05) %>%
+  group_by(sample_size) %>%
+  summarize(num_of_significant_p_values = n()) %>%
+  mutate(fraction = num_of_significant_p_values / nrow(results_student_t))
+print(significant_results_student_t)
+```
+
+### Discrete uniform distribution on {-1, 1}
+
+```{r}
+significant_results_discrete <- results_discrete_uniform %>%
+  filter(p_value < 0.05) %>%
+  group_by(sample_size) %>%
+  summarize(num_of_significant_p_values = n()) %>%
+  mutate(fraction = num_of_significant_p_values / nrow(results_discrete_uniform))
+print(significant_results_discrete)
+```
+
+## Plotting the fraction of significant results as the sample size increases
+
+### Continuous uniform distribution on [-1, 1]
+
+```{r}
+plot(significant_results_continuous$sample_size, significant_results_continuous$fraction, 
+     type = "o", 
+     xlab = "sample size", 
+     ylab = "fraction of significant results",
+     main = "Fraction of Significant Results vs. Sample Size \nContinuous uniform distribution on [-1, 1]",
+     col = "#311B92",
+     lwd = 2
+)
+```
+
+### Student-t distribution with degrees of freedom = 1
+```{r}
+plot(significant_results_student_t$sample_size, significant_results_student_t$fraction, 
+     type = "o", 
+     xlab = "sample size", 
+     ylab = "fraction of significant results",
+     main = "Fraction of Significant Results vs. Sample Size \nStudent-t distribution with degrees of freedom = 1",
+     col = "#311B92",
+     lwd = 2
+)
+```
+
+### Discrete uniform distribution on {-1, 1}
+
+```{r}
+plot(significant_results_discrete$sample_size, significant_results_discrete$fraction, 
+     type = "o", 
+     xlab = "sample size", 
+     ylab = "fraction of significant results",
+     main = "Fraction of Significant Results vs. Sample Size \nDiscrete uniform distribution on {-1, 1}",
+     col = "#311B92",
+     lwd = 2
+)
+```
+
+Here, we can observe that as the sample size increases, the fraction of significant results decreases (for the uniform distribution), which is maybe indicative of getting less surprising results (the true mean is closer to our null hypothesis value of 0). Whereas for the student-t an uniform discrete distributions, the fraction of p-values increases, which indicates that the true mean is further away from our null hypothesis of 0.
+
+### Exercise 2
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(plotly)
+
+data <- read.csv('/Users/matanatmammadli/Desktop/R codes/lung_data.csv')
+head(data)
+view(data)
+```
+
+```{r}
+fig <- plot_ly(data, x = ~Lung.function, color = ~Trial.arm, type = "box")
+fig
+```
+
+```{r}
+ggbar <- ggplot(data) + aes(x = Trial.arm, y = Lung.function, fill = Trial.arm) +
+  geom_bar(stat = "identity")
+ggbar
+ggplotly(ggbar, tooltip = c("x", "y"))
+```
+
+```{r}
+fig1 <- plot_ly(data, x = ~Lung.function, color = ~Trial.arm, type = "box")
+fig2 <- plot_ly(data, x = ~Lung.function, y = "ID", type = "box")
+
+fig <- subplot(fig1, fig2) %>% 
+  layout(title = 'Side By Side Subplots')
+fig
+```
+
+```{r}
+fig <- plot_ly()%>%
+  add_trace(data = data, x = ~Trial.arm, y = ~Lung.function, color = ~Trial.arm, type = "scatter", mode = "markers")
+fig
+```
+
+
+```{r}
+library(gmodels)
+library(yhat)
+
+install.packages("pacman")
+
+pacman::p_load(tidyverse, plyr, car, rcompanion, lmtest,
+               olsrr, ggdag, dagitty, janitor, tableone,
+               broom, mosaic)
+```
+```{r}
+data_tbl <- data
+```
+```{r}
+##Trial_arm <- data_tbl$Trial.arm
+##Trial_arm <- as.factor(Trial.arm)
+data_tbl %>%
+  mutate(Trial.arm = factor(data_tbl$Trial.arm, levels = c("Control", "Treatment")))
+contrasts(Trial.arm)
+```
+```{r}
+column_vec <- names(data_tbl)
+```
+
+```{r}
+control <- data_tbl[which(data_tbl$Trial.arm=="Control"), ] #make a table for the results of the control group only 
+treatment <- data_tbl[which(data_tbl$Trial.arm=="Treatment"), ]#make a table for the results of the treatment group only
+```
+
+```{r}
+## generalised linear model, linear regression
+lung_function <- data$Lung.function
+glm(Trial.arm ~ lung_function, data = data_tbl, family = "gaussian")
+```
+
+### Boxplot von Lung function data
+```{r}
+library("ggplot2")
+
+ggplot(data_tbl, aes(lung_function, Trial.arm)) +
+  geom_boxplot(fill="lightblue") +
+  geom_jitter()
+
+ggplot(data_tbl = control, aes(lung_function)) + 
+  geom_bar(stat = "count",fill="pink")
+  
+##ggplot(klausur_tbl, aes(CRP, POD)) +
+##  geom_boxplot() +
+##  geom_jitter()
+##
+ggplot(data_tbl, aes(lung_function)) +
+  geom_histogram(aes(fill = Trial_arm), color = "blue", binwidth = 2)
+
+mosaic::mean(POD ~ bloodpressure, data = klausur_tbl)
+```
+### Barplot of Lung function data
+```{r}
+ggplot(data_tbl, aes(lung_function, Trial.arm)) +
+  geom_bar() 
+```
+### Bee swarm plot von lung function data
+```{r}
+## x = kontinuerliche variable, y = binaer/dichotom
+
+ggplot(data_tbl, aes(x= lung_function, y= Trial.arm)) + 
+  geom_point(size=2)
+
+ggplot(control, aes(control$Lung.function,control$Trial.arm))+
+  geom_bar(color = "blue")
+
+mean(data_tbl$lung_function)
+
+sd(data_tbl$lung_function)
+
+control_mean <- mean(control$Lung.function) # 10.15
+treatment_mean <- mean(treatment$Lung.function) # 10.475
+```
+
+### Violin Plot von Lung function data
+```{r}
+ggplot(data_tbl, aes(x = Trial.arm, y = Lung.function,  fill = Trial.arm)) +
+  geom_violin() +
+  labs(x = "Group", y = "Lung function",
+       title = "Violin plot of Lung function by group")
+```
+
+## Density plot von Lung function data
+```{r}
+ggplot(data_tbl, aes(x = Lung.function, fill = Trial.arm)) +
+  geom_density(alpha = 0.5) +
+  labs(x = "Lung function", y = "Density",
+       title = "Density plot of Lung function by group") +
+  scale_fill_manual(values = c("#f8766d", "#00bfc4"), name = "Group")
+```
+
+### Q-Q Plot
+```{r}
+# Calculate the theoretical quantiles for a normal distribution
+expected_qq <- qnorm(p = seq(0.01, 0.99, by = 0.01))
+
+# Create the QQ plot
+ggplot(lung_data, aes(sample = Lung.function)) +
+  stat_qq(distribution = qnorm) +
+  stat_qq_line() +
+  labs(title = "Normal Q-Q Plot of Lung Function") +
+  xlab("Theoretical Quantiles") +
+  ylab("Sample Quantiles")
+```
+
+### Perform a two sample t-test
+```{r}
+t.test(Lung.function ~ Trial.arm, data = data_tbl)
+```
+
+
+```{r}
+## Binary logistic regression (one independent/continuous variable and one dependent binaer variable)
+
+logistic_model <- glm(data_tbl$Trial.arm ~ lung_function, family = binomial(), data_tbl)
+
+```
+```{r}
+##Splitting the data into Control and Treatment group
+X<-split(data_tbl, data_tbl$Trial.arm)
+X
+```
+
+```{r}
+# Predicting in the dataset
+pred_prob <- predict(logistic_model, X, type = "response")
+pred_prob
+```
+```{r}
+##Null Model (nur Intercept) 
+
+null_model <- glm(Trial.arm ~ 1, data = data_tbl, family = gaussian)
+
+null_model %>%
+  summary()
+```
+
+
+
+
+

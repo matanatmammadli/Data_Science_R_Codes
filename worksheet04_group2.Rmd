@@ -1,0 +1,219 @@
+---
+title: "worksheet04_group2"
+author: "Matanat Mammadli"
+date: "2023-05-13"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, 
+                      tidy.opts = list(width.cutoff = 70), 
+                      tidy = TRUE)
+```
+
+# Exercise 1 Simple Linear Regression
+
+## Downloading and reading the data
+```{r}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(gmodels)
+library(yhat)
+library(plotly)
+library(tidymodels)
+
+install.packages("tidymodels")
+install.packages("pacman")
+
+pacman::p_load(tidyverse, plyr, car, rcompanion, lmtest,
+               olsrr, ggdag, dagitty, janitor, tableone,
+               broom, mosaic)
+##install.packages("ggflags")
+choc_data <- read_csv('/Users/matanatmammadli/Desktop/R codes/chocolate.csv')
+choc_data
+view(choc_data)
+
+## Some data Manipulation
+Country <- choc_data$Country
+data_tbl <- choc_data %>%
+  mutate(Country = as.factor(Country))
+
+data_tbl
+```
+
+##Simple Linear Regression + Compute the intercept and slope + R^2 (Coefficient of Determination)
+```{r}
+## Model function y = b0 + b1 * x, b0 is intercept (Y achsenabschnitt), b1 is slope (Steigung)
+lm_data <- lm(`Nobel prizes per capita (scaled by 10 million)` ~ `Per capita chocolate consumption (kg)`, data = choc_data)
+lm_data
+summary(lm_data)
+lm_data$coefficients
+summary(lm_data)$r.squared
+
+lm_data2 <- lm( `Per capita chocolate consumption (kg)` ~`Nobel prizes per capita (scaled by 10 million)`, data = choc_data)
+lm_data2
+summary(lm_data2)
+lm_data2$coefficients
+summary(lm_data2)$r.squared
+
+## Linear regression in plotly 
+lm_model <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(`Nobel prizes per capita (scaled by 10 million)` ~ `Per capita chocolate consumption (kg)`, data = choc_data) 
+lm_model
+
+lm_model2 <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(`Per capita chocolate consumption (kg)` ~ `Nobel prizes per capita (scaled by 10 million)`, data = choc_data) 
+lm_model2
+
+```
+
+
+## Variables and Visualization (Scatter Plot)
+```{r pressure, echo=FALSE}
+## Scatterplot with the help of ggplot geom point 
+ggplot(data_tbl, aes(x = Country, y = `Nobel prizes per capita (scaled by 10 million)`, col = Country)) +
+  theme_minimal() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  geom_point() 
+  ##stat_smooth(method = "lm", se = FALSE)
+
+## Using other y (dependent variable)
+ggplot(data_tbl, aes(x = Country, y = `Per capita chocolate consumption (kg)`, col = Country)) +
+  theme_minimal() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  geom_point() 
+##  stat_smooth(method = "lm", se = FALSE)
+
+## Scatterplot with plot_ly function (plotly library) 
+`Nobel prizes per capita (scaled by 10 million)` <- data_tbl$`Nobel prizes per capita (scaled by 10 million)`
+
+fig1 <- plot_ly(data = data_tbl, x = ~Country, y = ~`Nobel prizes per capita (scaled by 10 million)`, type = "scatter", mode = "markers",
+                marker = list(size = 10,
+                color = 'rgba(255, 182, 193, .9)',
+                line = list(color = 'rgba(152, 0, 0, .8)',
+                width = 2)), name = 'Nobel prizes')
+fig1
+
+
+## using other dependent variable (y)
+fig2 <- plot_ly(data = data_tbl, x = ~Country, y = ~`Per capita chocolate consumption (kg)`, type = "scatter", mode = "markers",
+                marker = list(size = 10,
+                color = 'rgba(152, 255, 255, .9)',
+                line = list(color = 'rgba(30, 144, 255, .8)',
+                width = 2)))
+fig2
+```
+
+ - Dependent or response Variables are generally y Variables (they are dependent on x), which in our case is "Nobel prizes per capita (scaled by 10 million)", and also "Per capita chocolate consumption (kg)", independent or explanatory variable is x variable, which in our data is "Country". But we can also use or plot two originally independent variables against each other, making one of them  dependent on another one (for ex, `Per capita chocolate consumption (kg)` ~  `Nobel prizes per capita (scaled by 10 million)` or the other way around).
+ 
+
+## Adding computed regression line to the Scatter plot
+```{r}
+## Fixing missing values first
+choc_data_filtered <- choc_data %>% 
+  filter(!is.na(`Nobel prizes per capita (scaled by 10 million)`)) %>% 
+  filter(!is.na(`Per capita chocolate consumption (kg)`))
+
+##Scatterplot with plot() function
+
+plot(data_tbl$`Per capita chocolate consumption (kg)`, data_tbl$`Nobel prizes per capita (scaled by 10 million)`,
+     main='Scatter plot of chocolate data',xlab = 'Per capita chocolate consumption (kg)', ylab='Nobel prizes per capita (scaled by 10 million)', las = 2, pch=19)
+
+# plot a regression line
+abline(lm(data_tbl$`Nobel prizes per capita (scaled by 10 million)`~ data_tbl$`Per capita chocolate consumption (kg)`,data=data_tbl),col='red')
+
+## with different y (dependent) value
+plot(data_tbl$`Nobel prizes per capita (scaled by 10 million)`, data_tbl$`Per capita chocolate consumption (kg)` ,
+     main='Scatter plot of chocolate data',xlab = 'Nobel prizes per capita (scaled by 10 million)', ylab='Per capita chocolate consumption (kg)', las = 2, pch=19)
+
+# plot a regression line
+abline(lm(data_tbl$`Per capita chocolate consumption (kg)` ~ data_tbl$`Nobel prizes per capita (scaled by 10 million)`,data=data_tbl),col='red')
+
+## Scatterplot with the help of ggplot geom point and regression lines
+ggplot(choc_data_filtered, aes(x = `Per capita chocolate consumption (kg)`, y = `Nobel prizes per capita (scaled by 10 million)`)) +
+  theme_minimal() +
+  theme(text = element_text(size = 11.7)) +
+  xlim(0, 10) +
+   geom_point(colour = "dodgerblue", size = 2.5, alpha = 0.44)  +
+  geom_smooth(method="lm", formula = y ~ x, se = FALSE) 
+
+ggplot(choc_data_filtered, aes(x = `Nobel prizes per capita (scaled by 10 million)`, y = `Per capita chocolate consumption (kg)`)) +
+  theme_minimal() +
+  theme(text = element_text(size = 11.7)) +
+  xlim(0, 10) +
+   geom_point(colour = "magenta", size = 2.5, alpha = 0.44)  +
+  geom_smooth(method="lm", formula = y ~ x, se = FALSE) 
+
+## Scatterplot with plot_ly function and regression lines
+`Nobel prizes per capita (scaled by 10 million)` <- data_tbl$`Nobel prizes per capita (scaled by 10 million)`
+
+y <- choc_data_filtered$`Nobel prizes per capita (scaled by 10 million)`
+X <- choc_data_filtered$`Per capita chocolate consumption (kg)`
+
+lm_model <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(`Nobel prizes per capita (scaled by 10 million)` ~ `Per capita chocolate consumption (kg)`, data = choc_data) 
+lm_model
+
+x_range <- X
+xdf <- data.frame(x_range)
+colnames(xdf) <- c('Per capita chocolate consumption (kg)')
+
+ydf <- lm_model %>% predict(xdf) 
+
+colnames(ydf) <- c('Nobel prizes per capita (scaled by 10 million)')
+xy <- data.frame(xdf, ydf)
+
+fig1 <- plot_ly(data = choc_data_filtered, x = ~`Per capita chocolate consumption (kg)`, y = ~`Nobel prizes per capita (scaled by 10 million)`, type = "scatter", mode = "markers", 
+                marker = list(size = 10,
+                color = 'rgba(255, 182, 193, .9)',
+                line = list(color = 'rgba(152, 0, 0, .8)',
+                width = 2)), name = 'Nobel prizes')
+fig1 <- fig1 %>% add_trace(data = xy, x = ~Per.capita.chocolate.consumption..kg., y = ~Nobel.prizes.per.capita..scaled.by.10.million., name = 'Regression Fit', mode = 'lines')
+fig1
+
+## using dependency other way around
+
+X <- choc_data_filtered$`Nobel prizes per capita (scaled by 10 million)`
+y <- choc_data_filtered$`Per capita chocolate consumption (kg)`
+
+lm_model <- linear_reg() %>% 
+  set_engine('lm') %>% 
+  set_mode('regression') %>%
+  fit(`Per capita chocolate consumption (kg)` ~ `Nobel prizes per capita (scaled by 10 million)`, data = choc_data) 
+lm_model
+
+x_range <- X
+xdf <- data.frame(x_range)
+colnames(xdf) <- c('Nobel prizes per capita (scaled by 10 million)')
+
+ydf <- lm_model %>% predict(xdf) 
+
+colnames(ydf) <- c('Per capita chocolate consumption (kg)')
+xy <- data.frame(xdf, ydf)
+
+## using other dependent variable (y)
+fig2 <- plot_ly(data = choc_data_filtered, x = ~`Nobel prizes per capita (scaled by 10 million)`, y = ~`Per capita chocolate consumption (kg)`, type = "scatter", mode = "markers", name = 'Chocolate consumption', 
+                marker = list(size = 10,
+                color = 'rgba(152, 255, 255, .9)',
+                line = list(color = 'rgba(30, 144, 255, .8)',
+                width = 2)))
+fig2 <- fig2 %>% add_trace(data = xy, x = ~Nobel.prizes.per.capita..scaled.by.10.million., y = ~Per.capita.chocolate.consumption..kg., name = 'Regression Fit', mode = 'lines')
+fig2
+
+```
+
+The Assumptions of our model is fulfilled with visualisations. Most data points are close to the regression line or on the regression line, which means we have minimal residuals (vertical distance between observed and preditec y values), which also means our predicted y values are close to the actual y values. And our goal is to minimize the distance between data points and and regression line (predicted y value, y^ = alpha + beta * x + epsilon).
+Which means our regression line is the right one.
