@@ -1,0 +1,242 @@
+---
+title: "limma - Linear Models for Microarray Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("limma")
+BiocManager::install("genefilter")
+```
+
+```{r, message=FALSE}
+library(ggplot2)
+library(limma)
+library(pheatmap)
+library(ggsci)
+library(dplyr)
+library(genefilter)
+```
+
+```{r}
+# Read the matrix table 
+# Expression values of 3680 genes for 58 lung adenocarcinoma and 58 adjacent non-tumor lung samples
+rt=read.table("/Users/matanatmammadli/Desktop/The Project/lncRNA_training_clinical.txt",sep="\t",header=T,check.names=F)
+View(rt)
+rt=as.matrix(rt)
+
+# Assign gene names to be the row names
+rownames(rt)=rt[,1]
+exp=rt[,2:ncol(rt)]
+dimnames=list(rownames(exp),colnames(exp))
+rt=matrix(as.numeric(as.matrix(exp)),nrow=nrow(exp),dimnames=dimnames)
+
+# Condense a microarray data object so that values for replicate probes are replaced with their average.
+# Since we are using short matrix, there is no replication in genes.
+rt=avereps(rt)
+```
+
+```{r}
+# As the data samples were arranged in "normal-tumor-normal-tumor..."
+# Place the normal group in the first half of the data, and tumor group at the second half
+rt=rt[, c(seq(1,115,2) ,seq(2,116,2))]
+```
+
+```{r}
+# Check if the original data was transformed by log function
+# If the maximum expression value is larger than 30, transform the data using log function
+max(rt)
+if(max(rt)>30) 
+  rt=log2(rt+1)
+```
+
+```{r}
+# Normalize the data using normalizeBetweenArrays
+rt1=normalizeBetweenArrays(as.matrix(rt))
+```
+
+```{r}
+# Compare the data before and after normalization
+
+# Before normalization
+cols=rainbow(ncol(rt)) # Represent 116 samples with rainbow color
+par(cex = 0.7)
+if(ncol(rt)>40) par(cex = 0.5)   # Set the font size
+#pdf(file = "raw.pdf",width=5,height = 4)
+boxplot(rt,las=2,col =cols )     # Plotting
+#dev.off()
+
+# After normalization
+cols=rainbow(ncol(rt1)) # Represent 116 samples with rainbow color
+par(cex = 0.7)
+if(ncol(rt1)>40) par(cex = 0.5)   # Set the font size
+#pdf(file = "nor.pdf",width=5,height = 4.5)
+boxplot(rt1,las=2,col =cols )     # Plotting
+#dev.off()
+```
+
+```{r}
+# Set the normalized data as final data
+rt=rt1
+conNum=58     # Number of controls
+treatNum=58   # Number of treatments
+```
+
+
+```{r}
+# Differential Expression Analysis with limma
+Type=c(rep("con",conNum),rep("treat",treatNum))
+design <- model.matrix(~0+factor(Type))
+colnames(design) <- c("con","treat")
+```
+
+```{r}
+## IMPLEMENT 3 LIMMA ANALYSIS STEPS...
+# First step: lmFit() 
+fit <- lmFit(object = rt, design = design) # {Arguments: object = rt, design = design}
+
+# Second step: eBayes()
+cont.matrix <- makeContrasts(contrasts = "treat-con", levels = design) # {Arguments: contrasts = "treat-con", levels = design}
+fit2 <- contrasts.fit(fit, cont.matrix)
+fit2 <- eBayes(fit2, proportion = 0.01, stdev.coef.lim = c(0.1,4),
+       trend = FALSE, robust = FALSE, winsor.tail.p = c(0.05,0.1))
+
+# Third step: topTable() [return a complete table with all the genes: number = number of rows of data matrix]
+Diff = topTable(fit2, number = nrow(rt))
+```
+
+```{r}
+result <- decideTests(fit2) # Default: p.value=0.05, lfc=0
+summary(result)
+
+# "Notsig" represents acceptance of the null hypothesis (p-val >= 0.05)
+# "Up" indicates rejection in favor of the right tail alternative (logFC > 0 and adj.p.val < 0.05)
+# "Down" indicates rejection in favor of the left tail alternative (logFC < 0 and adj.p.val < 0.05)
+
+# Alternative way
+nrow(Diff[Diff$logFC<0 & Diff$adj.P.Val<0.05,])
+nrow(Diff[Diff$adj.P.Val>0.05,])
+nrow(Diff[Diff$logFC>0 & Diff$adj.P.Val<0.05,])
+
+# To select genes expressed 2-fold higher/lower in the treatment group, change lfc to log2(2) = 1
+result <- decideTests(fit2, lfc = 1)
+summary(result)
+```
+
+```{r}
+# Heatmap showing the top 15 most diverse genes in both directions
+Diff=Diff[order(as.numeric(as.vector(Diff$logFC))),]  # Order the genes based on logFC
+diffGene=as.vector(rownames(Diff))
+diffLength=length(diffGene)
+afGene=c()
+if(diffLength>(30)){
+  # Grab first 15 genes (expressed less in treatment group) and last 15 (expressed more in treatment group)
+  afGene=diffGene[c(1:15,(diffLength-15+1):diffLength)]  
+}else{
+  afGene=diffGene
+}
+afExp=rt[afGene,]
+
+# Label groups with N (control) and T (treatment)
+Type=c(rep("N",conNum),rep("T",treatNum))
+names(Type)=colnames(rt)
+Type=as.data.frame(Type)
+# Annotation colors for groups ("#E64B35FF" and "#4DBBD5FF")
+anncolor=list(Type=c(T=pal_npg()(1),N=pal_npg()(2)[2]))
+```
+
+```{r}
+#pdf(file="DIFF_heatmap15.pdf",height=3,width=5)
+pheatmap(afExp,                                                                      # Heatmap data
+         annotation=Type,                                                            # Group annotation
+         color = colorRampPalette(c(pal_npg()(2)[2],"white", pal_npg()(1)))(10),     # Heatmap color
+         cluster_cols =F,                                                            # Column clustering tree 
+         show_colnames = F,                                                          # Show column names
+         scale="row", 
+         fontsize = 9,
+         fontsize_row=7,
+         fontsize_col=6,
+         annotation_colors=anncolor
+)
+#dev.off()
+
+# Red represents up-regulated genes and blue represents down-regulated genes. White represents unchanged expression.
+```
+
+
+```{r}
+# Volcano plot
+adjP=0.05
+aflogFC=1   # Genes are significant only if expressed 2-fold higher/lower in treatment group
+Significant=ifelse((Diff$P.Value<adjP & abs(Diff$logFC)>aflogFC), ifelse(Diff$logFC>aflogFC,"Up","Down"), "Not")
+# Plotting
+p = ggplot(Diff, aes(logFC, -log10(P.Value)))+
+  geom_point(aes(col=Significant),size=3)+
+  scale_color_manual(values=c(pal_npg()(2)[2], "#838B8B", pal_npg()(1)))+
+  labs(title = " ")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5, face = "bold"))+
+  geom_hline(aes(yintercept=-log10(adjP)), colour="gray", linetype="twodash",linewidth=1)+
+  geom_vline(aes(xintercept=aflogFC), colour="gray", linetype="twodash",linewidth=1)+
+  geom_vline(aes(xintercept=-aflogFC), colour="gray", linetype="twodash",linewidth=1)
+# Add gene labels
+point.Pvalue=0.0001
+point.logFc=3
+Diff$symbol=rownames(Diff)
+#pdf("DIFF_vol.pdf",width=5.5,height=5)
+p=p+theme_bw()
+for_label <- Diff %>% 
+  dplyr::filter(abs(logFC) >point.logFc & P.Value< point.Pvalue )
+p+geom_point(size = 2, shape = 1, data = for_label) +
+  ggrepel::geom_label_repel(
+    aes(label = symbol),
+    data = for_label,
+    color="black",
+    label.size =0.1
+  )
+#dev.off()
+```
+
+### Extra exercise: rowttest
+```{r}
+# rowttest
+group <- factor(rep(1:2,each=58))
+
+# IMPLEMENT rowttest...
+rtt_result <- rowttests(rt, group, tstatOnly = FALSE, na.rm = FALSE)
+
+rtt_result$dm <- -rtt_result$dm
+
+adjP <- 0.05
+aflogFC <- 1
+Significant_rtt <- ifelse((rtt_result$p.value < adjP & abs(rtt_result$dm) > aflogFC), ifelse(rtt_result$dm > aflogFC, "Up", "Down"), "Not")
+
+p <- ggplot(rtt_result, aes(x = dm, y = -log10(p.value))) + geom_point(aes(col=Significant_rtt),size=3)+
+  scale_color_manual(values=c(pal_npg()(2)[2], "#838B8B", pal_npg()(1)))+
+  labs(title = " ")+
+  theme(plot.title = element_text(size = 16, hjust = 0.5, face = "bold"))+
+  geom_hline(aes(yintercept=-log10(adjP)), colour="gray", linetype="twodash",size=1)+
+  geom_vline(aes(xintercept=aflogFC), colour="gray", linetype="twodash",size=1)+
+  geom_vline(aes(xintercept=-aflogFC), colour="gray", linetype="twodash",size=1)
+
+point.Pvalue=0.0001
+point.logFc=3
+
+rtt_result$symbol <- rownames(rtt_result)
+
+p=p+theme_bw()
+for_label_rtt <- rtt_result %>% 
+  dplyr::filter(abs(dm) >point.logFc & p.value< point.Pvalue )
+p+geom_point(size = 2, shape = 1, data = for_label_rtt) +
+  ggrepel::geom_label_repel(
+    aes(label = symbol),
+    data = for_label_rtt,
+    color="black",
+    label.size =0.1
+  )
+```

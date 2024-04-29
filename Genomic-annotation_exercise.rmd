@@ -1,0 +1,104 @@
+---
+title: "Genomic annotation"
+output: pdf_document
+date: "2023-05-10"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Genomic annotation in Bioconductor
+
+## Required packages
+
+```{r}
+if (!"BiocManager" %in% rownames(installed.packages()))
+     install.packages("BiocManager")
+BiocManager::install(c("AnnotationDbi", "org.Hs.eg.db",
+                       "TxDb.Hsapiens.UCSC.hg19.knownGene",
+                       "EnsDb.Hsapiens.v86", "Homo.sapiens",
+                       "BSgenome.Hsapiens.UCSC.hg19", "Biostrings", "AnnotationHub", 
+                       "biomaRt", "KEGGREST", "rtracklayer"))
+```
+
+
+## Exercise 1: Basics
+This exercise illustrates basic use of the select() interface to annotation packages.
+
+Using "org.Hs.eg.db", answer the following questions:
+
+- What gene symbol corresponds to Entrez Gene ID 1000?
+
+```{r}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(EnsDb.Hsapiens.v86)
+
+set.seed(12345)
+select(org.Hs.eg.db, "1000", "SYMBOL")
+
+```
+
+- What is the Ensembl Gene ID for PPARG?
+
+```{r}
+select(org.Hs.eg.db, "PPARG","ENSEMBL", "SYMBOL")
+```
+
+- What is the UniProt ID for GAPDH?
+```{r}
+select(org.Hs.eg.db, "GAPDH", "UNIPROT", "SYMBOL")
+```
+
+## Exercise 2: Transcript annotation packages
+
+Using "org.Hs.eg.db" and transcript annotation packages (UCSC and Ensembl), answer the following questions:
+
+- How many transcripts does PPARG have, according to UCSC?
+
+```{r}
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+
+select(org.Hs.eg.db, "PPARG","ENTREZID", "SYMBOL")
+txs <- transcriptsBy(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txs[["5468"]]
+
+```
+
+- Does Ensembl agree?
+
+```{r}
+txs <- transcriptsBy(EnsDb.Hsapiens.v86)
+txs[["5468"]]
+```
+
+- How many genes are between 2858473 and 3271812 on chr2 in the hg19 genome?
+Hint: you make a GRanges like this - GRanges("chr2", IRanges(2858473,3271812))
+
+```{r}
+txs[txs %over% gns[1:2,]]
+```
+
+## Exercise 3: BSgenome packages
+
+Get the sequences for all transcripts of the TP53 gene.
+To get positional information in GRange object use "Homo.sapiens" object.
+
+```{r}
+# your code is here
+```
+## Exercise 4: KEGG 
+
+Get the Entrez Gene ID of the CDKN2A gene. Then, find the pathways it is part of using the keggGet() method. Visualize the 'Melanoma' pathway.
+
+```{r}
+# your code is here
+```
+
+##Exercise 5: Biomart
+
+Get all ENSEMBL transcript IDs of the CDKN2A (ENSG00000147889) gene.
+
+```{r}
+# your code is here
+```

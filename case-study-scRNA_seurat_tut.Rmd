@@ -1,0 +1,307 @@
+---
+title: "case-study-scRNA-seq"
+output: pdf_document
+date: "2023-06-02"
+---
+
+
+# Tutorial on single cell RNA seq analysis 
+
+```{r}
+
+
+################################## load library ######################################
+#install.packages("pacman")
+
+library(pacman)
+p_load(Seurat, tidyverse,hdf5r )
+
+
+```
+
+```{R}
+################################## load dataset - (may take a while) ###########################
+# get   Non Small lung cancer scRNA dataset from -> https://www.10xgenomics.com/resources/datasets/20k-mixture-of-nsclc-dtcs-from-7-donors-3-v3-1-with-intronic-reads-3-1-standard
+# download the Count matrix with raw data : Gene Expression - Feature / cell matrix HDF5 (raw)
+
+
+# read the dataset with Read10X_h5() function .Read10X() function reads in the output of the cellranger pipeline from 10X, returning a unique molecular identified (UMI) count matrix. 
+
+lc_dataset<- Read10X_h5(filename = '/Users/matanatmammadli/Desktop/20k_NSCLC_DTC_3p_nextgem_intron_Multiplex_count_raw_feature_bc_matrix.h5')
+
+# you will receive the message : 'Genome matrix has multiple modalities, returning a list of matrices for this genome'
+# since we have different modalities apart from gene expression data in this dataset 
+# to explore what modalities we have in the dataset use the command str() 
+
+
+###################### First task #########################
+# Look what kind of modalities  you can find in the dataset 
+str(lc_dataset)
+
+# Gene expression 
+# Antibody capture 
+# Multiplexing Captrue 
+
+
+#We are only interested in gene expression so lets extract the counts for the gene expression 
+# You can do that over the $ operator 
+
+counts_data <- lc_dataset$`Gene Expression`
+
+##have a look at the data 
+head(counts_data,10)
+
+
+## in rows we have all features/gene in column we have cell barcode names -> it is a sparse matrix(data structure to store gene expression data for single cell data )
+
+
+```
+
+
+```{R}
+########################## read counts in Seurat Object #########################
+# Initialize the Seurat object with the raw (non-normalized data).
+# define parameters: 
+# min.cells : minimum number of cells a gene must be expressed in to be included in the Seurat object. 
+# min.features : specifying the minimum number of cells a feature (gene) must be detected in to be included in the Seurat object
+
+
+lc.seurat.obj <- CreateSeuratObject(counts = counts_data, project = "LC", min.cells = 3, min.features = 200)
+str(lc.seurat.obj)
+
+########## Look how many features the dataset contains ##########
+lc.seurat.obj
+# An object of class Seurat 
+# 32978 features across 71880 samples within 1 assay 
+# Active assay: RNA (32978 features, 0 variable features)
+
+```
+
+```{R}
+############################ Quality Control #############################
+# we have a raw count matrix -> we want to filter out low quality cells 
+
+#### 1. QC
+
+## access metadata slot with @
+View(lc.seurat.obj@meta.data)
+
+#Lets look at the number of features and  number of total molecules in cell 
+#these numbers might give information about quality of cell: 
+
+#Low-quality cells or empty droplets will often have very few genes
+#Cell doublets or multiplets may have a high gene count(multible cells sequenced together but labeled as single cell)
+
+
+
+#Lets look  at the number of mitochondrial genes because they can provide insights into the overall health and quality of the cells being analyzed
+#Low-quality / dying cells often exhibit extensive mitochondrial contamination
+#Mitochondrial gene expression can indicate the presence of cellular stress or damage.
+#We can calculate mitochondrial QC metrics with the PercentageFeatureSet() function, which calculates the percentage of counts originating from a set of features
+
+# % MT reads  in each cell , patter = all genes starting with MT calculate  and add to metadata
+lc.seurat.obj[["percent.mt"]] <- PercentageFeatureSet(lc.seurat.obj, pattern = "^MT-")
+View(lc.seurat.obj@meta.data)
+
+
+### visualize data with function from Seurat create violin plot with column from meta data  ####
+# what can you see ? 
+
+VlnPlot(lc.seurat.obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3,col = c("red", "blue", "green"))
+
+####### visualize data with Scatter plot to select check quality #####
+# What can you see ? 
+
+FeatureScatter(lc.seurat.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
+geom_smooth(method = 'lm')
+
+#bottom left: if experiment caputred low number of genes only these where sequences over and over again and hence you see higher number of transkripts counts there 
+#top left corner: if experiment captured high number of genes ob did not sequenced deep enough 
+# in any cases check cells if they are low quality cells and not this is not caused due sequencing error or artifacts 
+
+# for QC also other metices can be used like : ribosomal genes 
+```
+
+
+
+```{R}
+
+################### 2. Filtering ----------------- #############################
+#use subset() function for filtering out features + set parameters 
+# We filter cells that have unique feature counts over 2,500 or less than 200
+# We filter cells that have >5% mitochondrial counts
+lc.seurat.obj <- subset(lc.seurat.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 &                         percent.mt < 5)
+
+#An object of class Seurat 
+#32978 features across 54053 samples within 1 assay 
+#Active assay: RNA (32978 features, 0 variable features)
+
+
+#check how many features the dataset contains after filtering 
+lc.seurat.obj
+
+
+#An object of class Seurat 
+#32978 features across 54053 samples within 1 assay 
+#Active assay: RNA (32978 features, 0 variable features)
+```
+
+```{R}
+
+####################### 3. Normalize data ---------- #########################
+#in order to compare expression between multiple cells wee need to normalize data
+# How to normalize : divide gene expression measurement in each cell by total expression , * multiplied by scaling factor and then log transfrom it 
+
+
+#We need to dothat to get all measurement in relative measures to make comparisons across different cells
+
+#nsclc.seurat.obj <- NormalizeData(lc.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+# OR 
+lc.seurat.obj <- NormalizeData(lc.seurat.obj)
+
+# In Seurat Object all commands that been run post filtering are going to be saved in your object under Commands
+str(lc.seurat.obj)
+
+
+
+```
+
+```{R}
+
+######################### 4. Identify highly variable features -------------- ##############################
+#we only want to select features/genes that have high cell to cell variation  (i.e, they are highly expressed in some cells, and lowly expressed in others). It was found that focusing on these genes in downstream analysis helps to highlight biological signal in single-cell datasets.
+# We want a subset of genes/features that are most informative or relevant for downstream analyses.
+
+
+### FindVariableFeatures() function can be used (models the mean-variance relationship inherent in single-cell data). By default 2,000 features are returned per dataset. These can be used in downstream analysis, like PCA.
+
+lc.seurat.obj <- FindVariableFeatures(lc.seurat.obj, selection.method = "vst", nfeatures = 2000)
+
+#######Identify the 10 most highly variable genes##############
+##### Look what the 10 most highly variable genes are ##########
+top10 <- head(VariableFeatures(lc.seurat.obj), 10)
+top10
+
+
+########### plot the variable features with and without labels ##############
+VariableFeaturePlot(lc.seurat.obj)
+LabelPoints(plot = plot1, points = top10, repel = TRUE)
+
+
+
+
+```
+
+
+
+
+```{R}
+
+######################  5. Scaling -------------#################################
+#Scaling = applying a linear transformation (‘scaling’) which is a standard pre-processing step prior to dimensional reduction techniques like PCA
+#many single data many contain unwanted sources of variation like technical noise(batch effects) OR BIOLOAGICAL SOURCES (cell cycle differences) 
+
+#To ensure that the cells in the downstream analysis are not clustered based on this type of variation, but on current biological similarities of effects, the data must be scaled.
+
+#We cann use ScaleData() function. 
+#It shifts the expression of each gene, so that the mean expression across cells is 0 
+#Scales the expression of each gene, so that the variance across cells is 1
+#This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
+
+
+#We could scale out whole data but this takes a lot of time and space. For only need the scaled data for our Downstream analysis so we can only to perform  the scaling on the previously identified variable features
+var.genes <- rownames(VariableFeatures(lc.seurat.obj))
+lc.seurat.obj <- ScaleData(lc.seurat.obj, features = var.genes)
+
+#OR 
+#lc.seurat.obj <- ScaleData(lc.seurat.obj)
+#it will date the VariableFeatures by default 
+
+
+### We can see how many features are there after different steps
+### rna assay -> counts= raw, data=normalized counts, scale data=scaled data 
+str(lc.seurat.obj)
+
+```
+
+```{R}
+
+
+############# 6. Perform Linear dimensionality reduction -------------- ###########
+#To identify sources of heterogeneity in dataset we perform PCA on the scaled data.
+
+lc.seurat.obj <- RunPCA(lc.seurat.obj, features = VariableFeatures(object = lc.seurat.obj))
+
+
+#Seurat provides several useful ways of visualizing both cells and features that define the PCA, including VizDimReduction(), DimPlot(), and DimHeatmap()
+
+
+# Lets visualize PCA resultsonly top 5 features  and top 5 principal components 
+print(lc.seurat.obj[["pca"]], dims = 1:5, nfeatures = 5)
+
+
+#DimHeatmap() will give you a easy exploration of the primary sources of heterogeneity in a dataset, and can be useful when trying to decide which PCs to include for further downstream analyses. Both cells and features are ordered according to their PCA scores.
+
+
+DimHeatmap(lc.seurat.obj, dims = 1:5, cells = 500, balanced = TRUE)
+
+
+
+# We want to choose only those statically significant components which capture the majority for signal in down stream analysis 
+#Lets Rank the  principle components based on the percentage of variance explained by each one  with (ElbowPlot() function).
+
+ElbowPlot(lc.seurat.obj)
+
+#In this example, we can observe an ‘elbow’ around PC9-10, suggesting that the majority of true signal is captured in the first 10 PCs.
+#PC ranked by percantage of variance : only consider the PC that have higher percent of variance , after elbow not much varince gets explained 
+
+```
+
+
+
+
+```{R}
+
+########################  7. Clustering ------------  ######################################
+# We want to cluster cells which have similar feature expression pattern , dims = pc 
+
+
+#Seurat v3 applies a graph-based clustering.First it constructs a KNN graph based on the euclidean distance in PCA space, and refine the edge weights between any two cells based on the shared overlap in their local neighborhoods (Jaccard similarity). This step is performed using the FindNeighbors() function. As a input it takes the first XX PCs
+
+lc.seurat.obj <- FindNeighbors(lc.seurat.obj, dims = 1:12)
+
+# The FindClusters() function implements modularity optimization techniques procedure, and contains a resolution parameter that sets the ‘granularity’ of the downstream clustering, with increased values leading to a greater number of clusters. 
+# understanding resolution -> want our cell assignt to clusters , resolution oof clusters ,
+
+
+lc.seurat.obj <- FindClusters(lc.seurat.obj, resolution = c(0.1,0.3, 0.5, 0.7, 1))
+
+
+
+##### for each resolution different number of clusters 
+View(lc.seurat.obj@meta.data)
+
+DimPlot(lc.seurat.obj, group.by = "RNA_snn_res.0.7", label = TRUE)
+
+# setting identity of clusters
+Idents(lc.seurat.obj)
+Idents(lc.seurat.obj) <- "RNA_snn_res.0.7"
+Idents(lc.seurat.obj)
+
+
+```
+
+```{R}
+########8.  non-linear dimensionality reduction -------------- ################
+#different cluster method in low dim space 
+#Seurat offers several non-linear dimensional reduction techniques, such as tSNE and UMAP, to visualize and explore these datasets. The goal of these algorithms is to learn the underlying manifold of the data in order to place similar cells together in low-dimensional space. Cells within the graph-based clusters determined above should co-localize on these dimension reduction plots. 
+
+lc.seurat.obj <- RunUMAP(lc.seurat.obj, dims = 1:12)
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(lc.seurat.obj, reduction = "umap")
+
+
+```
+
+

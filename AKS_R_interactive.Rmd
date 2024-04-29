@@ -1,0 +1,244 @@
+---
+title: "Example of RTCGAToolbox and DIABLO"
+output:
+  html_document:
+    df_print: paged
+date: "2023-05-30"
+---
+
+
+# RTCGAToolbox:
+# Retrieve available datasets from Firehose
+https://gdac.broadinstitute.org/
+http://firebrowse.org/
+```{r}
+library(RTCGAToolbox)
+
+getFirehoseDatasets()
+```
+# Retrieve the last 3 running dates of Firehose
+```{r}
+getFirehoseRunningDates(last = 3)
+```
+
+# Retrieve the last 3 analyze dates of Firehose
+```{r}
+getFirehoseAnalyzeDates(last = 3)
+
+```
+# Download and load the READ (Rectum adenocarcinoma) data from Firehose
+```{r}
+# READ mutation data and clinical data
+readData1 <- getFirehoseData(dataset="READ", runDate="20150821", forceDownload=TRUE, clinical=TRUE, Mutation=TRUE)
+```
+```{r}
+readData1
+```
+# Extract clinical data from readData1
+The severity of the disease will be indicated in pathology variables. T staging refers to size and invasiveness of tumor, N staging refers to presence of cancer cells in various lymph nodes
+```{r}
+clin = readData1@clinical
+clin$t_stage = factor(clin$pathology_T_stage)
+clin
+```
+
+# Extract mutation data from brcaData1
+```{r}
+mut = readData1@Mutation
+mut
+```
+
+# Create a contingency table of gene and variant classification counts
+name of gene Human Genome Organization (HUGO) Gene Nomenclature Committee. 
+```{r}
+gt = table(mut$Hugo_Symbol, mut$Variant_Classification)
+mn = apply(gt[,12:13], 1, sum)
+omn = order(mn, decreasing=TRUE)
+gt[omn[1:20], c(12:13,17,18)]
+```
+
+
+# Display a subset of clinical data and mutation data
+```{r}
+clin[1:4,1:3]
+mut[1:4,c(1,16)]
+```
+# Preprocess the sample IDs in the mutation data
+```{r}
+mid = tolower(substr(mut[,16],1,12))
+mid = gsub("-", ".", mid)
+mean(mid %in% rownames(clin))
+mut$sampid = mid
+```
+# Create a boxplot of mutation counts by t_stage
+
+```{r}
+# Count the number of mutations per sample
+nmut = sapply(split(mut$sampid, mut$sampid),length)
+clinwmut = clin[names(nmut),]
+clinwmut$nmut = nmut
+
+with(clinwmut, boxplot(split(nmut, t_stage), log="y"))
+```
+```{r}
+rnaseq = getData(readData1, "RNASeq2GeneNorm")
+rnaseq
+```
+here we fail to show you expression data, as it failed to download.
+
+```{r}
+data(accmini)
+```
+
+```{r}
+clin = accmini@clinical
+clin$t_stage = factor(clin$pathology_T_stage)
+clin
+```
+```{r}
+mut = accmini@Mutation
+mut
+
+```
+```{r}
+mid = tolower(substr(mut[,16],1,12))
+mid = gsub("-", ".", mid)
+mean(mid %in% rownames(clin))
+mut$sampid = mid
+```
+```{r}
+mid
+```
+
+
+
+```{r}
+rnaseq = accmini@RNASeq2GeneNorm
+rnaseq = rnaseq[[1]]@DataMatrix
+```
+
+
+```{r}
+rid = tolower(substr(colnames(rnaseq),1,12))
+rid = gsub("-", ".", rid)
+mean(rid %in% rownames(clin))
+colnames(rnaseq) = rid
+```
+```{r}
+rid
+```
+
+```{r}
+intersect(rid,mid)
+```
+
+
+
+# Small example of ML DIABLO:
+The aim of this N-integration analysis, specifically the sparse Discriminant Analysis of Multiblock Data (DIABLO) in this case, is to identify a multi-omics signature that is highly correlated and can effectively discriminate between the different subtypes of breast cancer, namely Basal, Her2, and LumA.
+```{r}
+library(mixOmics) # import the mixOmics library
+data(breast.TCGA) # extract the TCGA data
+```
+
+This example breast.TCGA data is normalised and preprocessed . They were divided into a training set with a subset of 150 samples from the mRNA, miRNA and proteomics data, and a test set includes 70 samples, but only from the mRNA, miRNA and methylation data (proteomics missing).
+## Extracting  train data from the breast.TCGA dataset
+```{r}
+mirna <- breast.TCGA$data.train$mirn
+mRNA <- breast.TCGA$data.train$mrna
+protein <- breast.TCGA$data.train$protein
+# selecting train dataset to train
+X = list(miRNA = mirna, mRNA = mRNA, proteomics = protein)
+
+```
+
+
+## select the Y train variable for the model:
+```{r}
+Y <- breast.TCGA$data.train$subtype
+head(Y)
+```
+
+## create a test dataset using the breast.TCGA data
+```{r}
+test_dataset = list(mRNA = breast.TCGA$data.test$mrna,
+                      miRNA = breast.TCGA$data.test$mirna)
+
+```
+
+
+For the good predictive ability of model, it is strongly advised that prior to using the DIABLO framework that the data be examinsed in a non-integrative context. Here, the correlation between the top 25 features of each dataframe (in a pairwise fashion) are shown in Figure below.
+```{r}
+list.keepX = c(25, 25) # select arbitrary values of features to keep
+list.keepY = c(25, 25)
+
+# generate three pairwise PLS models
+pls1 <- spls(X[["miRNA"]], X[["mRNA"]], 
+             keepX = list.keepX, keepY = list.keepY) 
+pls2 <- spls(X[["miRNA"]], X[["proteomics"]], 
+             keepX = list.keepX, keepY = list.keepY)
+pls3 <- spls(X[["mRNA"]], X[["proteomics"]], 
+             keepX = list.keepX, keepY = list.keepY)
+
+# plot features of first PLS
+plotVar(pls1, cutoff = 0.5, title = "(a) miRNA vs mRNA", 
+        legend = c("miRNA", "mRNA"), 
+        var.names = FALSE, style = 'graphics', 
+        pch = c(16, 17), cex = c(2,2), 
+        col = c('darkorchid', 'lightgreen'))
+
+# plot features of second PLS
+plotVar(pls2, cutoff = 0.5, title = "(b) miRNA vs proteomics", 
+        legend = c("miRNA", "proteomics"), 
+        var.names = FALSE, style = 'graphics', 
+        pch = c(16, 17), cex = c(2,2), 
+        col = c('darkorchid', 'lightgreen'))
+
+# plot features of third PLS
+plotVar(pls3, cutoff = 0.5, title = "(c) mRNA vs proteomics", 
+        legend = c("mRNA", "proteomics"), 
+        var.names = FALSE, style = 'graphics', 
+        pch = c(16, 17), cex = c(2,2), 
+        col = c('darkorchid', 'lightgreen'))
+```
+There seems high correlation between the features with a correlation above 0.5. we can use cor() to see it.
+
+
+## Setting the number of features to use for the X datasets
+```{r}
+list.keepX = list(miRNA = c(16, 17), mRNA = c(18,5), proteomics = c(5, 5))
+```
+
+## Running the DIABLOs block.splsda method
+```{r}
+result.sparse.diablo.tcga <- block.splsda(X, Y, keepX = list.keepX)
+```
+
+#plot sample plot:
+plotDIABLO() is a diagnostic plot to check whether the correlation between components from each data set has been maximised.
+```{r}
+plotDiablo(result.sparse.diablo.tcga , ncomp = 1)
+```
+As can be seen in Figure above, the first components from each data set are highly correlated to each other (indicated by the large numbers in the bottom left). The colours and ellipses related to the sample subtypes indicate the discriminative power of each component to separate the different tumour subtypes.
+
+## Predict the outcome using the trained model on the test dataset
+```{r}
+
+predict.diablo = predict(result.sparse.diablo.tcga, newdata = test_dataset)
+
+```
+
+
+## Calculating the confusion matrix using the get.confusion_matrix function
+```{r}
+
+confusion.mat = get.confusion_matrix(truth = breast.TCGA$data.test$subtype,
+                                     predicted = predict.diablo$WeightedVote$centroids.dist[,2])
+confusion.mat
+```
+  Basal subtype: Out of 21 samples that belong to the Basal subtype in the test dataset, 20 samples were correctly predicted as Basal, 1 sample was incorrectly predicted as Her2, and none were incorrectly predicted as LumA.
+
+Her2 subtype: Out of 14 samples that belong to the Her2 subtype, all 14 samples were correctly predicted as Her2.
+    LumA subtype: Out of 35 samples that belong to the LumA subtype, 34 samples were correctly predicted as LumA, 1 sample was incorrectly predicted as Basal, and none were incorrectly predicted as Her2.
+    
+reference: http://mixomics.org/mixdiablo/diablo-tcga-case-study/

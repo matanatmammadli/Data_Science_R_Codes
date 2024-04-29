@@ -1,0 +1,34 @@
+---
+title: "TheProject"
+author: "Matanat Mammadli"
+date: "2023-06-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(gmodels)
+library(yhat)
+library(plotly)
+library(tidymodels)
+```
+
+```{r}
+survival <- read.csv("/Users/matanatmammadli/Desktop/The Project/survival%2FBLCA_survival.txt", sep = "\t")
+View(survival)
+```
+
+
+```{r}
+fpkm <- read.csv("/Users/matanatmammadli/Desktop/The Project/TCGA-BLCA.htseq_fpkm.txt", sep = "\t")
+View(fpkm)
+```
+

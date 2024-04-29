@@ -1,0 +1,347 @@
+---
+title: "Presentation_reticulate"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+date: "2023-05-20"
+---
+From Aakash Nepal:
+
+A complete set of tools for Python and R interoperability are offered by the reticulate package. The package contains reticulated python facilities.
+
+1) Using Python interactively within a R session, sourcing Python scripts, importing Python modules, and more are all ways to call Python from R.
+
+2) Conversion of R and Python objects (such as R and Pandas data frames or R matrices to NumPy arrays).
+
+3) Flexible binding to many Python versions, including Conda and virtual environments.
+
+Reticulate allows for smooth, high-performance interoperability by embedding a Python session into your R session. If you are a member of a data science team that utilizes both Python and R, then it simplifies your workflow.
+
+#Getting started
+
+
+# Installation:
+
+```{r setup, include=FALSE}
+#Install the reticulate package using the instructions below:
+#install.packages("reticulate")
+```
+
+# Python version and selection of conda:
+```{r load reticulate}
+#load the library
+library(reticulate)
+#list the existing environments:
+conda_list()
+```
+
+
+
+# Python Conda environments and configurations:
+new_env<- "my_reticulate_env"
+#create new environment:
+conda_create(envname= new_env, python_version ="3.7.3")#miniconda_python_version()
+# clone the environment
+conda_clone(envname=new_env, clone = "base", conda = "auto")
+#remove an environment:
+conda_remove(envname= new_env, packages = NULL, conda = "auto")
+#update an environment:
+conda_update(conda = "auto")
+#see the version of conda environment
+conda_version(conda = "auto")
+#use specific conda environment:
+use_condaenv(envname , required = TRUE)
+```{r script1}
+#choose environment:
+new_env <- "this_env"
+#use specific conda environment:
+use_condaenv(new_env , required = TRUE)
+print(paste0(new_env," loaded sucessfully"))
+```
+## installing python packages to the environment using reticualte:
+1) Install packages one by one:
+py_install("pandas",envname = new_env) #Python's data frame library
+py_install("numpy", envname = new_env) #Python's array library
+py_install("seaborn", envname = new_env) #Python's visualisation library
+#py_install("napari", envname = new_env) #doesnt work
+
+2) or install multiple packages at once:
+
+py_install(packages = c("pandas", "scikit-learn", "matplotlib"),envname = new_env)
+
+```{r}
+#install multiple packages at once:
+py_install(packages = c("pandas", "scikit-learn", "matplotlib"),envname = new_env)
+```
+
+
+
+# Type conversions
+```{r echo=FALSE, fig.cap = "Test figure caption."}
+library(imager)
+im<-load.image("type_conversion.png")
+plot(im,axes=FALSE)
+
+```
+fig_reference: https://rstudio.github.io/reticulate/
+
+# For Rscript:
+
+#Sourcing Python scripts
+```{r}
+source_python("somepycode.py")
+flights <- read_flights("flights.csv")
+flights
+```
+
+
+# Calling Python from R
+
+# what we if we want to use python inside R script?
+
+# Importing Modules:
+```{r}
+#import python packages:
+pd <- import("pandas")
+np<- import("numpy",convert = FALSE)
+#import sklearn
+sl_model_selection <- import("sklearn.model_selection")
+skl <- import("sklearn")
+skl_ensemble <- import("sklearn.ensemble")
+skl_pipeline <- import("sklearn.pipeline")
+skl_metrics <- import("sklearn.metrics")
+skl_externals <- import("sklearn.externals")
+skl_lm <- import("sklearn.linear_model")
+# Import visualisation libraries
+sns <- import('seaborn')
+plt <- import('matplotlib.pyplot')
+#import R packages:
+library(ggplot2)
+```
+
+#An example:
+py_to_r(), similarly there is r_to_py().
+```{r}
+# do some array manipulations with NumPy
+a <- np$array(c(1:10))
+summ <- a$cumsum()
+print("python:")
+summ
+# convert to R explicitly at the end
+print("R:")
+py_to_r(summ)
+```
+# Executing Code
+use py_run_string()
+
+#An example:
+```{r}
+#example using pandas and numpy (also example using the library not installed dask)
+py_run_string("import numpy as np
+import pandas as pd
+#import dask as dd
+def process_data(data):
+    # Convert data to a NumPy array
+    np_data = np.array(data)
+    
+    # Perform some operations using NumPy
+    np_result = np_data * 2
+    
+    # Convert the result back to a pandas DataFrame
+    df_result = pd.DataFrame(np_result)
+    
+    return df_result")
+
+prodata_r<- py$process_data(c(1,2,3,4))
+prodata_r<- prodata_r*2
+
+prodata_r
+```
+# RMD:
+
+## Python Chunks
+
+```{python}
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib as plt
+import sklearn.model_selection as sl_model_selection
+import sklearn.ensemble as skl_ensemble
+import sklearn.pipeline as skl_pipeline
+import sklearn.metrics as skl_metrics
+import sklearn.linear_model as skl_lm
+import sklearn.externals as skl_externals
+print("all packages imported sucessfully")
+```
+
+
+
+## some usage example:
+```{python}
+# libraries
+import matplotlib.pyplot as plt
+ 
+# width of the bars
+barWidth = 0.3
+ 
+# Choose the height of the blue bars
+bars1 = [10, 9, 2]
+ 
+# Choose the height of the cyan bars
+bars2 = [10.8, 9.5, 4.5]
+ 
+
+# The x position of bars
+r1 = np.arange(len(bars1)) #numpy 
+r2 = [x + barWidth for x in r1]
+ 
+# plotting with matplotlib:
+# Create blue bars
+plt.bar(r1, bars1, width = barWidth, color = 'blue', edgecolor = 'black', capsize=7, label='poacee')
+ 
+# Create cyan bars
+plt.bar(r2, bars2, width = barWidth, color = 'cyan', edgecolor = 'black', capsize=7, label='sorgho')
+ 
+# general layout
+plt.xticks([r + barWidth for r in range(len(bars1))], ['cond_A', 'cond_B', 'cond_C'])
+plt.ylabel('height')
+plt.legend()
+ 
+# Show graphic
+plt.show()
+plt.clf()
+
+```
+# same example using only R :
+```{r}
+# Define the data
+bars1 <- c(10, 9, 2)
+bars2 <- c(10.8, 9.5, 4.5)
+
+# Set the width of the bars
+barWidth <- 0.3
+
+# Calculate the positions of the bars
+r1 <- 1:length(bars1)
+r2 <- r1 + barWidth
+
+# Create the bar plot
+barplot(
+  height = rbind(bars1, bars2),
+  beside = TRUE,
+  col = c("blue", "cyan"),
+  ylim = c(0, max(bars1, bars2)),
+  xlab = "Conditions",
+  ylab = "Height",
+  names.arg = c("cond_A", "cond_B", "cond_C"),
+  legend.text = c("poacee", "sorgho"),
+  args.legend = list(x = "topright")
+)
+
+```
+
+# exchange informations between R and python:
+
+##from python to r:
+
+```{python}
+import seaborn as sns
+import matplotlib.pyplot as plt
+iris = sns.load_dataset('iris')
+iris
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(py$iris, aes(x = sepal_length, y = petal_length)) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  theme_bw(base_size = 13) +
+  ggtitle("Relationship between sepal and petal length in Iris") 
+
+```
+##from r to python
+```{r}
+data(iris)
+head(iris)
+```
+```{python}
+# the "r" object is the interface to the R environment.
+sns.regplot(
+  data=r.iris,
+  x="Sepal.Length",
+  y="Petal.Length"
+).set(title="Relationship between sepal and petal length in Iris")
+plt.show()
+```
+# A Machine learning Randomforest example:
+```{r}
+library(readr)
+#https://vincentarelbundock.github.io/Rdatasets/datasets.html
+diamonds <- read_csv("C:/Users/aakas/Downloads/diamonds.csv")
+diamonds
+```
+```{python}
+# Import label encoder
+from sklearn.preprocessing import LabelEncoder
+
+diamonds = r.diamonds
+categorical_features = ['cut', 'color', 'clarity']
+le = LabelEncoder()
+
+# Convert the variables to numerical
+for i in range(3):
+    new = le.fit_transform(diamonds[categorical_features[i]])
+    diamonds[categorical_features[i]] = new
+diamonds.head()
+```
+
+```{python}
+# Create features and target
+X = diamonds[['carat', 'depth', 'table', 'x', 'y', 'z', 'clarity', 'cut', 'color']]
+y = diamonds[['price']]
+
+```
+
+```{r}
+RF<- import("sklearn.ensemble")
+tts<- import("sklearn.model_selection")
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.25, random_state = 101)
+split <- tts$train_test_split(py$X, py$y, test_size=0.75)
+split
+```
+
+
+```{r}
+X_test <- r_to_py(split[[1]])
+X_train <- r_to_py(split[[2]])
+Y_test <- r_to_py(split[[3]])
+Y_train <- r_to_py(split[[4]])
+
+```
+
+```{python}
+from sklearn.ensemble import RandomForestRegressor
+
+#X_test, X_train, Y_test, Y_train= r.split
+
+regr = r.RF.RandomForestClassifier(n_estimators = 10, max_depth = 10, random_state = 101)
+
+regr.fit(r.X_train, r.Y_train.values.ravel())
+#regr
+```
+```{r}
+model_coef <- py$regr$feature_importances_
+model_coef
+```
+#some conclusions:
+0) Reticulate can be a powerful tool for seamless integration between the two languages(R and Python)
+1) Reticulate allows you to combine R's statistical capabilities with Python's extensive ecosystem of libraries for machine learning, deep learning, data visualization, and more.
+2)Some functions or operations may be faster in one language compared to the other
+3) Some heavy packages like dask and napari are not able to be installed /used, we need to investigate further for these packages.
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
