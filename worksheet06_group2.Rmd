@@ -1,0 +1,698 @@
+---
+pdf_document: default
+author:
+- Pham Gia Cuong
+- Matanat Mammadli
+- Samra Hamidovic
+date: "2023-05-28"
+output:
+  html_document: null
+  df_print: paged
+  pdf_document: default
+title: "worksheet06_group02"
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise 1 - Logistic Regression of Cancer incidence (40 points)
+
+## Downloading and reading the data
+```{r}
+library(tidyverse)
+library(tibble)
+library(purrr)
+library(magrittr)
+library(ggplot2)
+library(gmodels)
+#library(tidymodels)
+library(plotrix) # for the std.error() function
+library(yhat)
+library(plotly)
+library(dplyr)
+library(MASS)
+library(visreg)
+```
+
+```{r}
+cancer_data <- load('/home/samra/Dokumente/Studium/Bioinformatik/Module/Master/SoSe2023/Data Science Part1/Übung/u06/CRC_Indidence_Data.RData')
+cancer_data # the whole dataset
+view(cancer_data)
+
+incidence_data <- CRC_Incidence_Data
+incidence_data 
+view(incidence_data)
+
+subset_data <- CRC_subset
+subset_data
+view(subset_data)
+
+expanded_data <- CRC_subset_expanded
+expanded_data
+view(expanded_data)
+```
+
+## a)
+```{r}
+## Spearman's Correlation Coefficient in R
+corr <- cor.test(x=subset_data$age, y=subset_data$cancers, method = 'spearman')
+corr
+
+```
+
+## b)
+```{r}
+## Logistic Regression
+lg <- glm(cancerstatus ~ age, family = "binomial", data = expanded_data)
+lg
+summary(lg)
+summary(lg)$coefficients
+
+```
+ - Interpret the regression coefficients: Intercept of -12.25 means we have a negative intercept value, our graph or log odds function starts below zero (of y value). b1 is 0.0885. Probability for an individual with age X to have cancer is: P(X) = e^(-12.25 + 0.0885 * X) / 1 + e^(-12.25 + 0.0885 * X)
+ - Odds of cancer rho means P(X) / 1 - P(X) = e^(-12.25 + 0.0885 * X). Increasing age one year would mean e^(-12.25 + 0.0885 * (X+1)) = e^(-12.25 + 0.0885 * X + 0.0885) = e^(-12.1615 + 0.0885 * X) -> Which in return means, with increasing age 1 year, odds of cancer rho would also increase.
+
+## c)
+```{r}
+## Logistic regression with CRC_subset dataframe
+lg2 <- glm(formula = cbind(cancers, noncancers) ~ age, family = "binomial", data = subset_data)
+lg2
+summary(lg2)
+summary(lg2)$coefficients
+```
+ 
+ - With this formula of logistic regression of subset data, results were almost identical in Estimate, Std.error, z value and P value. Intercept and b1 was also identical. Only number of Fisher scoring iterations changed, in expanded data it was 10, in subset data it was 4.
+ 
+
+## d)
+```{r}
+# model without an intercept term of the CRC_subset
+model1_subset <- glm(cbind(cancers, noncancers) ~ -1 + age, family = "binomial", data = subset_data)
+model1_subset
+# model with an intercept term of the CRC_subset
+model2_subset <- glm(cbind(cancers, noncancers) ~ age, family = "binomial", data = subset_data)
+model2_subset
+
+logLik(model1_subset) # logLikelihood without intercept
+logLik(model2_subset) # logLikelihood with intercept
+
+# model with an intercept term of the CRC_subset_expanded
+model1_expanded <- glm(cancerstatus ~ -1 + age, family = "binomial", data = expanded_data)
+model1_expanded
+model2_expanded <- glm(cancerstatus ~ age, family = "binomial", data = expanded_data)
+model2_expanded
+
+logLik(model1_expanded) # logLikelihood without intercept
+logLik(model2_expanded) # logLikelihood with intercept
+```
+ - In both datasets. the log likelihood without an intercept is a bit higher than the log likelihood with an intercept. Log-likelihood function measures the goodness of fit for a model. The higher the value of the log-likelihood, the better a model fits a dataset. Which in our case means, models without an intercept had higher log likelihood value -> they fit the dataset better.
+
+## e)
+```{r}
+model_cancers <- glm(log(cancers) ~ age + sex + race + registry + year_bin, data = incidence_data)
+model_cancers
+summary(model_cancers)
+summary(model_cancers)$coefficients
+## log of p value, is equal to -6.943973
+log(9.644303e-04) 
+
+model_noncancers <- glm(log(noncancers) ~ age + sex + race + registry + year_bin, data = incidence_data)
+model_noncancers
+summary(model_noncancers)
+summary(model_noncancers)$coefficients
+## log of p value, is equal to - Inf
+log(0.000000e+00)
+```
+
+ - In model_cancers data summary, we had negative Intercept (-0.1293) value, in model_noncancers data summary we had positive Intercept value (12.4697). The intercept (sometimes called the “constant”) in a regression model represents the mean value of the response variable when all of the predictor variables in the model are equal to zero.
+ - Also t-Statistics value was different, in model_cacers data summary it was negative (-3.301231), in model_noncancers data summary it was positive and very high (330.964463). The t-value measures the size of the difference relative to the variation in the sample data. Put another way, t is simply the calculated difference represented in units of standard error. The greater the magnitude of T, the greater the evidence against the null hypothesis, which means there is a significant difference.
+  - p values: If p-value is lower than 0.05, then that variable is significant with at least 95% confidence and we can reject null hypothesis. The lower the p-value, the greater the statistical significance of the observed difference.
+ 
+## f)
+```{r}
+lM_cancers <- glm(log(cancers) ~ (age)^2 + sex + race + registry + year_bin, data = incidence_data)
+lM_cancers
+lM_noncancers <- glm(log(noncancers) ~ (age)^2 + sex + race + registry + year_bin, data = incidence_data)
+lM_noncancers
+```
+
+## g)
+```{r}
+visreg(model_cancers, "age", ylab="log(cancers)")
+visreg(model_noncancers, "age", ylab="log(noncancers)")
+```
+
+# Exercise 2 - ENCODE project II (30 points)
+
+-   Bowtie2 :
+
+    -   Function: Alignment the sequencing data
+
+    -   Input: Fastq files (single-end or paired-end)
+
+    -   Output: Bam or Sam file
+
+    -   Information from Input files: Sequencing data, Id of reads,
+        Quality of sequencing data
+
+    -   Information from Output file: Local aligned Sequencing file to a
+        reference, Quality of alignemnt, Read groups
+
+-   STAR :
+
+    -   Function: Alignment of RNA-seq data
+    -   Input: RNA-seq Fastq File (pair-edn or single-end)
+    -   Output: Bam or Sam file
+    -   Information from Input files: Sequencing data, Id of reads,
+        Quality of sequencing data
+    -   Information from Output file: aligned Sequencing file to a
+        reference, Quality of alignemnt, Read groups
+
+-   Samtools :
+
+    -   Function: a set of utilities that manipulate alignments in the
+        SAM (Sequence Alignment/Map), BAM, and CRAM formats.
+
+    -   Input: Bam,Sam,Cram files
+
+    -   Output: Bam,Sam,Cram, statistical file
+
+    -   Information from Input files: aligned Sequencing file to a
+        reference, Quality of alignemnt, Read groups
+
+    -   Information from Output file: binary encoded alignment file,
+        statistical information likes coverage, alignment quality, many
+        more
+
+-   Bedtools :
+
+    -   Function: analysis of genomic regions -- e.g. overlap, distance,
+        extracting DNA sequences, find closest gene, ...
+
+    -   Input: Bed, Bam, VCF, GTF/GFF
+
+    -   Output: Bed
+
+    -   Information from Input files: Regions, variants, genes,
+
+    -   Information from Output file: overlapped regions, closet
+        non-overlapping genes.
+
+-   Picardtools :
+
+    -   Function: manipulating high-throughput sequencing (HTS) data and
+        formats such as SAM/BAM/CRAM and VCF
+
+    -   Input: SAM/BAM/CRAM and VCF
+
+    -   Output: SAM/BAM/CRAM and VCF
+
+    -   Information from Input files: alignment file, variants,
+        annotated variants
+
+    -   Information from Output file: removed duplicated reads
+        SAM/BAM/CRAM files
+
+-   Macs2 :
+
+    -   Function: Gathering the area, in which number of aligned reads
+        is high
+
+    -   Input: Bam file
+
+    -   Output: A narrowPeak (.narrowPeak) file
+
+    -   Information from Input files: alignment file
+
+    -   Information from Output file: BED6+4 format file which contains
+        the peak locations together with peak summit, pvalue and qvalue
+
+-   Fastqc :
+
+    -   Function: spot potential problems in high througput sequencing
+        datasets
+
+    -   Input: Fastq files (single-end or paired-end)
+
+    -   Output: html
+
+    -   Information from Input files: Sequencing data, Id of reads,
+        Quality of sequencing data
+
+    -   Information from Output file: Information about quality of
+        sequencing data
+
+-   deepTools :
+
+    -   Function: Tools for exploring deep sequencing data
+
+    -   Input: Bam file
+
+    -   Output: HTML,
+
+    -   Information from Input files: alignment file
+
+    -   Information from Output file: Quality, coverage,
+
+## Exercise 3 - Omics studies (30 points)
+
+## by Pham Gia Cuong ---
+
+**Title:** Cell type and gene expression deconvolution with BayesPrism
+enables Bayesian integrative analysis across bulk and single-cell RNA
+sequencing in oncology\
+**Reference:**
+
+-   What is the main scientific question?
+
+**Write a summary (ca. 300 words):**
+
+The study focused on addressing a major challenge in oncology by
+developing a statistical model that integrates single-cell and bulk
+RNA-seq data to gain new insights into cancer-stromal interactions.
+
+The authors used publicly available datasets from the Gene Expression
+Omnibus (GEO) database as well as additional data downloaded from
+cancer-related databases and websites such as TCGA and CIBERSORT. They
+analyzed these datasets using a variety of computational methods,
+including clustering, differential expression analysis, and pathway
+enrichment analysis.
+
+The results of the study revealed several key findings related to
+cancer-stromal interactions. For example, the authors identified
+specific cell types within the tumor microenvironment that were
+associated with poor prognosis in certain types of cancer. They also
+found evidence for cross-talk between different cell types within the
+tumor microenvironment, which may play a role in tumor progression and
+metastasis.
+
+In addition, the authors developed a novel approach for integrating
+single-cell and bulk RNA-seq data that allowed them to identify gene
+expression changes at both the cellular and tissue level. This approach
+could be useful for future studies aimed at understanding complex
+biological systems such as cancer.
+
+Overall, this study provides important insights into the role of stromal
+cells in cancer progression and highlights the potential of integrative
+analysis approaches for gaining new insights into complex biological
+systems. The findings could have important implications for the
+development of new cancer therapies targeting the tumor
+microenvironment.
+
+**Keywords:**
+
+-   What keywords did you use to find the paper?:
+    -   bulk rna sequencing statistics analysis methods
+-   What reference paper did you use to find the paper?
+    -   I didn't find it from any reference.
+
+**Data:**
+
+-   What type of data was generated?
+
+    -   Gene and molecule expression data
+
+-   What technologies were used to generate the data?
+
+    -   Single cell RNA sequencing and bulk RNA sequencing
+
+-   How many samples were analysed?
+
+    -   the authors mention that they analyzed 1,350 pseudo-bulk RNA-seq
+        samples simulated using single-cell RNA-seq data from 27
+        patients with GBM (glioblastoma multiforme) for some of their
+        analyses. They also used 12 bulk RNA-seq samples from
+        independent healthy adults for other analyses.
+
+-   How many features (e.g. genes) were analysed?
+
+    -   The authors mention that they excluded ribosomal protein-coding
+        and mitochondrial genes from their reference profile to reduce
+        batch effects. They also excluded genes on the sex chromosomes
+        to avoid sex-specific transcription states. However, it is
+        unclear how many genes were included in their final analysis
+        after these exclusions were made.
+
+**Data access:**
+
+-   In what format is the data available (e.g. FASTQ)?
+
+    -   scRNA-seq will give us gene expression matrix for each
+        individual cell in the sample.
+
+    -   bulk RNA-seq will give us a matrix of gene expression values for
+        the entire sample. This matrix contains information on the
+        expression levels of thousands of genes in the mixture of cells
+        present in the sample.
+
+-   Is any processed data available (e.g. mutation calls, count
+    matrices,. . . )?
+
+-   Are there any restrictions to data access? No
+
+**Methodology:**
+
+-   What computational/statistical methods were used to analyze the
+    data?
+
+    -   scRNA-seq data: gene expression quantification,Seurat v3.0 to
+        perform quality control, normalization, dimensionality
+        reduction, clustering, and cell type identification.
+
+    -   bulk RNA-seq data: differential expression analysis and pathway
+        enrichment analysis
+
+-   Was a new method developed in the paper?
+
+    -   BayesPrism to model cancer-stromal interactions as a continuous
+        variable using Cox proportional-hazards model
+
+-   What R/Python packages were used?
+
+    -   Deseq2, Seurat, clusterProfiler
+
+**Other:**
+
+-   Was this a multi-modal analysis? If yes, in what way?
+
+    -   Yes, the authors integrated scRNA-seq and bulk RNA-seq data to
+        perform an integrative analysis of cell type composition and
+        gene expression in individual cell types from bulk RNA-seq,
+        using patient-derived, scRNA-seq as prior information.
+
+-   Was there anything special about the paper, e.g. single-cell
+    analysis?
+
+    -   They used new method called BayesPrism to combine information
+        from scRNA-seq and bulk RNA-seq data
+
+-   Can you imagine to do a similar analysis for your main project?
+
+    -   It will take time. However, it's possible.
+
+**Related work:**
+
+-   Compile a list of papers (2-3) that do a similar analysis. If none
+    exist, how did you check that there are none?
+
+    -   Liang L, Yu J, Li J, Li N, Liu J, Xiu L, Zeng J, Wang T, Wu L.
+        Integration of scRNA-Seq and Bulk RNA-Seq to Analyse the
+        Heterogeneity of Ovarian Cancer Immune Cells and Establish a
+        Molecular Risk Model. Front Oncol. 2021 Sep 21;11:711020. doi:
+        10.3389/fonc.2021.711020. PMID: 34621670; PMCID: PMC8490743.
+
+    -   Yu L, Shen N, Shi Y, Shi X, Fu X, Li S, Zhu B, Yu W, Zhang Y.
+        Characterization of cancer-related fibroblasts (CAF) in
+        hepatocellular carcinoma and construction of CAF-based risk
+        signature based on single-cell RNA-seq and bulk RNA-seq data.
+        Front Immunol. 2022 Sep 23;13:1009789. doi:
+        10.3389/fimmu.2022.1009789. PMID: 36211448; PMCID: PMC9537943.
+
+-   Are there any online databases where the type of omics data used in
+    the paper is publicly available?
+
+    -   Yes
+
+        -   TCGA
+            ([https://portal.gdc.cancer.gov)](https://portal.gdc.cancer.gov%29/)
+
+        -   IVY GAP
+            ([https://glioblastoma.alleninstitute.org)](https://glioblastoma.alleninstitute.org%29/)
+
+## by Matanat Mammadli
+
+**Title:** A New Approach for Identification of Cancer-related Pathways using Protein Networks and Genomic Data
+**Reference:**
+
+-   What is the main scientific question?
+
+**Write a summary (ca. 300 words):**
+
+ The main issue and goal of this article is to find out how to use static omics data and available biological knowledge to get new information about the elements of the control system in cancer cells. Because of disturbances in their control systems, cancer cells have anomalous development and proliferation rates. A very informative data for studying such complex phenomena would be dynamical data evaluated through time series of omics measurements taken from a single cell or from a set of synchronized cells. The study of the behavior of cellular control system requires this type of high-throughput dynamical data. Unfortunately, this type of data is not largely available.
+ 
+ In order to access the state of the cellular control system, one can use gene expression profile and the signaling pathways. In the article they use a combination of these two static omics data (the human PPI network and the transcript expression measurements taken from breast cancer tissues) to gain insights on the states of a cancer cell. This labeled PPI graph connects the problem of extracting information about cancer cell dynamics from static omics data and complementary biological knowledge to the formal approach of probabilistic graph models, such as gene expression network and motif network analysis. The labeled subgraphs under this study will be called as motifs. A statistical computational model was formalized and implemented in order to extract information from this kind of data.
+ 
+ To exemplify the application of some aspects of the developed conceptual framework, authors verified the hypothesis that different types of cancer cells have different disturbed signaling pathways. They developed a method that recovers small protein networks, called motifs, which are differentially represented in some subtypes of breast cancer. These differentially represented motifs are enriched with specific gene ontologies as well as with new putative cancer genes.
+ 
+**Keywords:**
+
+-   What keywords did you use to find the paper?:
+
+    -   statistical/computational methods omics
+-   What reference paper did you use to find the paper?
+
+    -   I didn't use reference paper.
+    
+**Data:**
+
+-   What type of data was generated?
+
+    -   The TCGA expression data from the cBio portal. A z-score threshold           was used to classify the genes as upregulated (z-score >3) or                downregulated (z-score <−3).
+    -   PPI data.
+    -   Enrichment data.
+
+-   What technologies were used to generate the data?
+
+    -   RNA-Seq and microarray experiments. TCGA data were acquired using the         CGDS-R function from cBio.
+    -   The human PPI network was obtained from the STRING database. A               confidence score is calculated based on the evidence collected from          different data types. In this case they selected interactions with           score 700 or 900 from experimental or in silico evidences.
+    -   The Enrichment protein datasets derived from the analyzed motifs were         submitted to clusterProfiler package, a enrichment tool provided by          the R platform.
+
+-   How many samples were analysed?
+
+    -   It was not talked about, how many samples of data they analyzed in           the paper.
+
+-   How many features (e.g. genes) were analysed?
+
+    -   The authors mention that they calculated confidence score for PPI            data and chose interactions with score 700-900. However, it is
+        unclear how many genes were included in their final analysis
+        after these exclusions were made.
+    -   For TCGA data a z-score threshold was used to classify the genes as          upregulated (z-score >3) or downregulated (z-score <−3). But here            they also do not mention how many genes were analysed.  
+    -   For enrichment data there was a p-value cutoff score equal to 0.05           for all enrichments, but also it was not mentioned how many genes            were analysed.
+
+**Data access:**
+
+-   In what format is the data available (e.g. FASTQ)?
+
+    -   TCGA data is available in matrix rna txt files (when you download it         as tar gz files from cBio portal).
+
+    -   PPI data is available as fasta and txt files in STRING database.
+    
+    -   Enrichment data is available as BRITE table files and fasta sequence         files.
+
+-   Is any processed data available (e.g. mutation calls, count
+    matrices,. . . )?
+    
+      -  I think count matrices are available.
+
+-   Are there any restrictions to data access? 
+
+    -  No.
+
+**Methodology:**
+
+-   What computational/statistical methods were used to analyze the
+    data?
+
+    -   The basic search and count algorithm
+    
+    -  An algorithm for connected graphs with four vertices
+
+-   Was a new method developed in the paper?
+
+    -   Yes, authors developed a method that recovers small protein networks,
+        called motifs, which are differentially represented in some subtypes
+        of breast cancer.
+
+-   What R/Python packages were used?
+
+    -   clusterProfiler package, cgdsr-package
+    
+**Other:**
+
+-   Was this a multi-modal analysis? If yes, in what way?
+
+    -   Yes, because multiple datasets were used and
+        computational/statistical methods were used.
+
+-   Was there anything special about the paper, e.g. single-cell
+    analysis?
+
+    -   Yes, they used the combination of two static omics data, gene
+        expression profile and the signaling pathways.
+
+-   Can you imagine to do a similar analysis for your main project?
+
+    -   Why not? It's possible.
+
+**Related work:**
+
+-   Compile a list of papers (2-3) that do a similar analysis. If none
+    exist, how did you check that there are none?
+
+    -   William Yang, Kenji Yoshigoe, Xiang Qin, Jun S Liu, Jack Y Yang,
+        Andrzej Niemierko, Youping Deng, Yunlong Liu, A Dunker, Zhongxue
+        Chen, Liangjiang Wang, Dong Xu, Hamid R Arabnia, Weida Tong, Mary
+        Yang
+    
+       Identification of genes and pathways involved in kidney renal clear          cell carcinoma
+        BMC Bioinformatics.2014;15 Suppl 17(Suppl 17):S2. doi:
+        10.1186/1471-2105-15-S17-S2.  Epub 2014 Dec 16. 
+        PMID: 25559354  PMCID: PMC4304191  DOI: 10.1186/1471-2105-15-S17-S2
+
+    -   Francesco Bardozzo , Pietro Lió, Roberto Tagliaferri 
+    
+        A study on multi-omic oscillations in Escherichia coli metabolic
+        networks
+        BMC Bioinformatics.2018 Jul 9;19(Suppl 7):194.  doi:
+        10.1186/s12859-018-2175-5.
+        PMID: 30066640  PMCID: PMC6069781  DOI: 10.1186/s12859-018-2175-5
+        
+
+-   Are there any online databases where the type of omics data used in
+    the paper is publicly available?
+
+    -   Yes
+
+        -   cBio Portal for cancer genomics
+             https://www.cbioportal.org
+
+        -   STRING Database
+            https://string-db.org
+
+## by Samra Hamidovic
+
+**Title:** 
+OmicsON – Integration of omics data with molecular 
+networks and statistical procedures
+
+**Reference:**
+
+    - What is the main scientific question?
+
+**Write a summary (ca. 300 words):**
+
+The focus of the study is to develope the analysis of omics data even further. 
+A huge amount of atomized biological data collected in various databases 
+is given and more knowledge of their relation by theoretical methods is needed.
+For a better omics data analysis, the OmicsON R library is presented in 
+this paper. Biological  knowledge with mathematical procedures is implemented 
+in this library. OmicsON is a tool for the integration of two sets 
+of data: transcriptomics and metabolomics.
+
+Besides the implementation in R, the authors used Gene mapping and statistical 
+methods as well. 
+In the workflow of the library, the functional grouping and statistical 
+analysis are applied. Subgroups among the transcriptomic and metabolomics sets 
+are created based on the biological knowledge stored in Reactome and String 
+databases. With this tool it is possible to analyze such sets of data by 
+multivariate statistical procedures like Canonical Correlation Analysis (CCA) 
+or Partial Least Squares (PLS). The integration of metabolomic and 
+transcriptomic data based on the methodology contained in OmicsON helps to 
+easily obtain information on the connection of data from two different sets. 
+With this information  the relationship between gene expression and metabolite 
+concentrations can be assessed, which in turn facilitates the biological 
+interpretation of the analyzed process. 
+
+**Keywords:**
+
+-   What keywords did you use to find the paper?:
+    -   omics data proteomics statistical paper
+-   What reference paper did you use to find the paper?
+    -   I didn't find it from any reference.
+
+**Data:**
+
+-   What type of data was generated?
+
+    -   transcriptomic and lipidomic data (fatty acids)
+
+-   What technologies were used to generate the data?
+
+    -   Gene mapping and grouping data
+
+-   How many samples were analysed?
+
+    -   the authors mention in the results that the population comprises
+        mice nurtured in five different diet regimes, with 40 
+        individuals in total.
+
+-   How many features (e.g. genes) were analysed?
+
+    -   A gene expression data of 120 selected genes potentially 
+        involved in lipid metabolism and concentrations of 21 fatty acids. 
+        Its not a large dataset but sufficient
+
+**Data access:**
+
+-   In what format is the data available (e.g. FASTQ)?
+
+    -   the Reactome Pathway database
+
+    -   Results from the Reactome step are decorated by
+        extra interactions of genes based on knowledge taken from 
+        the STRING database
+
+-   Is any processed data available (e.g. mutation calls, count
+    matrices,. . . )?
+    
+    -   the Reactome Pathway and STRING database can be downloaded
+
+-   Are there any restrictions to data access? No
+
+**Methodology:**
+
+-   What computational/statistical methods were used to analyze the
+    data?
+
+    -   Canonical Correlation Analysis (CCA)
+
+    -   Partial Least Squares regression (PLS)
+
+-   Was a new method developed in the paper?
+
+    -   no
+
+-   What R/Python packages were used?
+
+    -   Deseq2, Seurat, clusterProfiler
+
+**Other:**
+
+-   Was this a multi-modal analysis? If yes, in what way?
+
+    -   Yes: All the packages that were needed are from the OmicsON R library
+    -   For example: PLS calculation, STRINGdb
+
+-   Was there anything special about the paper, e.g. single-cell
+    analysis?
+
+    -   no
+
+-   Can you imagine to do a similar analysis for your main project?
+
+    -   It will take time. However, it's possible due to the assessebility.
+
+**Related work:**
+
+-   Compile a list of papers (2-3) that do a similar analysis. If none
+    exist, how did you check that there are none?
+
+    -   Jasmine Chong, Jianguo Xia 
+        Using MetaboAnalyst 4.0 for Metabolomics Data Analysis, Interpretation, 
+        and Integration with Other Omics Data
+
+    -   Florian Rohart, Benoît Gautier, Amrit Singh, Kim-Anh Lê Cao
+        mixOmics: An R package for 'omics feature selection and multiple 
+        data integration
+        
+    -   Andrew Patt, Jalal Siddiqui, Bofei Zhang, Ewy Mathé 
+        Integration of Metabolomics and Transcriptomics to Identify 
+        Gene-Metabolite Relationships Specific to Phenotype
+
+-   Are there any online databases where the type of omics data used in
+    the paper is publicly available?
+
+    -   Yes
+
+        -   https://github.com/cmujzbit/OmicsON
